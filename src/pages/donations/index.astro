@@ -1,0 +1,10 @@
+---
+export const prerender = false;
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import DonationsPage from '../../components/donations/DonationsPage';
+---
+<BaseLayout title="Donaciones" showSidebars={true} currentPath="/donations">
+  <div class="px-4 py-2">
+    <DonationsPage client:load />
+  </div>
+</BaseLayout>

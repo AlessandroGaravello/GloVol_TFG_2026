@@ -1,0 +1,9 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import EditProfilePage from '../../components/profile/EditProfilePage';
+---
+<BaseLayout title="Editar perfil" showSidebars={false}>
+  <div class="min-h-screen bg-black pt-4 pb-12">
+    <EditProfilePage client:load />
+  </div>
+</BaseLayout>

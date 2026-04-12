@@ -1,0 +1,40 @@
+---
+import '../styles/global.css';
+import Header from '../components/layout/Header';
+import LeftSidebar from '../components/layout/LeftSidebar';
+import RightSidebar from '../components/layout/RightSidebar';
+
+interface Props {
+  title?: string;
+  showSidebars?: boolean;
+  currentPath?: string;
+}
+
+const { title = 'GloVol', showSidebars = true, currentPath = '' } = Astro.props;
+---
+
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title} — GloVol</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body class="bg-black text-white min-h-screen">
+    <Header client:load />
+
+    {showSidebars ? (
+      <div class="flex pt-14">
+        <LeftSidebar client:load currentPath={currentPath} />
+        <main class="flex-1 ml-56 mr-72 min-h-screen">
+          <slot />
+        </main>
+        <RightSidebar client:load />
+      </div>
+    ) : (
+      <main class="pt-14">
+        <slot />
+      </main>
+    )}
+  </body>
+</html>

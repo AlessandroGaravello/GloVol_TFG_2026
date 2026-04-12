@@ -1,0 +1,177 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // HELPERS
+    // ─────────────────────────────────────────────────────────────────────────
+    function isAuth() {
+      return request.auth != null;
+    }
+    function isOwner(userId) {
+      return isAuth() && request.auth.uid == userId;
+    }
+    function userData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function isAdmin() {
+      return isAuth() && userData().role == 'admin';
+    }
+    function isVerified() {
+      return isAuth() && userData().isVerified == true;
+    }
+    function hasWarCrimesAccess() {
+      return isAuth() && userData().warCrimesAccess == true;
+    }
+    function canPostWarCrimes() {
+      return isVerified() &&
+        get(/databases/$(database)/documents/verifiedProfiles/$(request.auth.uid)).data.canPostWarCrimes == true;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // /users/{userId}
+    // ─────────────────────────────────────────────────────────────────────────
+    match /users/{userId} {
+      // Perfiles públicos
+      allow read: if true;
+
+      // Al registrarse: puede crear su propio documento sin necesitar userData()
+      allow create: if isOwner(userId);
+
+      // Para actualizar: debe ser el dueño o admin
+      // Pero si es el dueño, no llamamos a userData() para evitar bucle
+      allow update: if (request.auth != null && request.auth.uid == userId) || isAdmin();
+      allow delete: if isAdmin();
+
+      match /followers/{followerId} {
+        allow read, write: if isAuth();
+      }
+      match /following/{followingId} {
+        allow read, write: if isAuth();
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // /verificationRequests/{requestId}
+    // ─────────────────────────────────────────────────────────────────────────
+    match /verificationRequests/{requestId} {
+      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+      allow read:   if isOwner(resource.data.userId) || isAdmin();
+      allow update: if isAdmin(); // solo admins cambian el status
+      allow delete: if isAdmin();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // /verifiedProfiles/{userId}
+    // ─────────────────────────────────────────────────────────────────────────
+    match /verifiedProfiles/{userId} {
+      allow read:  if true;
+      allow write: if isAdmin();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // /disasters/{disasterId}
+    // ─────────────────────────────────────────────────────────────────────────
+    match /disasters/{disasterId} {
+      allow read:   if true;
+      allow create: if isVerified() || isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // /posts/{postId}
+    // ─────────────────────────────────────────────────────────────────────────
+match /posts/{postId} {
+  // Posts normales son públicos; crímenes de guerra requieren acceso especial
+  allow read: if resource.data.isWarCrimeReport == false ||
+    hasWarCrimesAccess();
+
+  allow create: if isVerified() &&
+    (request.resource.data.isWarCrimeReport == false || canPostWarCrimes());
+
+  allow update: if isOwner(resource.data.authorId) || isAdmin();
+  allow delete: if isAdmin();
+
+  match /likes/{userId} {
+    allow read, write: if isAuth();
+  }
+
+  // ← ESTO ES LO QUE FALTA
+  match /comments/{commentId} {
+    allow read:   if true;
+    allow create: if isAuth();
+    allow update: if isOwner(resource.data.authorId) || isAdmin();
+    allow delete: if isOwner(resource.data.authorId) || isAdmin();
+  }
+}
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // /donations/{donationId}
+    // Donaciones Bizum: el usuario declara el importe, admin verifica el comprobante
+    // ─────────────────────────────────────────────────────────────────────────
+    match /donations/{donationId} {
+      // Solo el donante puede crear su propia donación
+      allow create: if isAuth() && request.resource.data.donorId == request.auth.uid;
+
+      // Solo el donante y admins pueden ver los datos de una donación
+      allow read: if isOwner(resource.data.donorId) || isAdmin();
+
+      // Solo admins pueden cambiar verificationStatus
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // /volunteers/{volunteerId}
+    // ─────────────────────────────────────────────────────────────────────────
+    match /volunteers/{volunteerId} {
+      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+
+      // El voluntario puede ver sus propios registros; org./gobierno verificados pueden ver la lista
+      allow read: if isOwner(resource.data.userId) || isVerified() || isAdmin();
+
+      // El voluntario puede cancelar; org./gobierno pueden actualizar estado
+      allow update: if isOwner(resource.data.userId) || isVerified() || isAdmin();
+      allow delete: if isOwner(resource.data.userId) || isAdmin();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // /warCrimeReports/{reportId}
+    // Doble-gated: escritura requiere canPostWarCrimes, lectura requiere warCrimesAccess
+    // ─────────────────────────────────────────────────────────────────────────
+    match /warCrimeReports/{reportId} {
+      allow read:   if hasWarCrimesAccess();
+      allow create: if canPostWarCrimes();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // /mediaContent/{mediaId}
+    // ─────────────────────────────────────────────────────────────────────────
+    match /mediaContent/{mediaId} {
+      allow read:   if isAuth();
+      allow create: if isAuth() && request.resource.data.uploadedBy == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // /notifications/{notificationId}
+    // ─────────────────────────────────────────────────────────────────────────
+    match /notifications/{notificationId} {
+      allow read:   if isOwner(resource.data.userId);
+      allow update: if isOwner(resource.data.userId); // marcar como leída
+      allow create: if isAdmin();
+      allow delete: if isOwner(resource.data.userId) || isAdmin();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // /adminActions/{actionId}
+    // ─────────────────────────────────────────────────────────────────────────
+    match /adminActions/{actionId} {
+      allow read, write: if isAdmin();
+    }
+  }
+}

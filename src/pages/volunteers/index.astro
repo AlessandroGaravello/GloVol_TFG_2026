@@ -1,0 +1,10 @@
+---
+export const prerender = false;
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import VolunteersPage from '../../components/volunteers/VolunteersPage';
+---
+<BaseLayout title="Voluntariado" showSidebars={true} currentPath="/volunteers">
+  <div class="px-4 py-2">
+    <VolunteersPage client:load />
+  </div>
+</BaseLayout>

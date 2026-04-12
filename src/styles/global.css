@@ -1,0 +1,156 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   GLOVOL — SISTEMA DE TEMAS
+   .dark en <html>   → modo oscuro  (negro/zinc)  [DEFAULT]
+   sin .dark          → modo claro   (blanco/grises)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Variables — DARK MODE (default) ──────────────────────────────────────── */
+:root {
+  --gv-accent:      #22c55e;
+  --gv-accent-dim:  #16a34a;
+
+  --bg:             #000000;   /* fondo body */
+  --bg-card:        #09090b;   /* tarjetas */
+  --bg-input:       #18181b;   /* inputs */
+  --bg-pill:        #18181b;   /* pills de acción — siempre oscuros */
+  --bg-pill-hover:  #27272a;
+  --border:         #27272a;
+  --border-2:       #3f3f46;
+  --text:           #ffffff;
+  --text-2:         #a1a1aa;
+  --text-3:         #71717a;
+  --pill-text:      #e4e4e7;   /* texto dentro de los pills */
+}
+
+/* ── Variables — LIGHT MODE ───────────────────────────────────────────────── */
+html:not(.dark) {
+  --bg:             #f3f4f6;   /* gris claro como en el Figma */
+  --bg-card:        #ffffff;
+  --bg-input:       #ffffff;
+  --bg-pill:        #18181b;   /* pills SIEMPRE oscuros, igual que en el Figma */
+  --bg-pill-hover:  #2d2d2d;
+  --border:         #e4e4e7;
+  --border-2:       #d1d5db;
+  --text:           #09090b;
+  --text-2:         #52525b;
+  --text-3:         #71717a;
+  --pill-text:      #f4f4f5;   /* texto de pill claro sobre fondo oscuro */
+}
+
+/* ── Base body ────────────────────────────────────────────────────────────── */
+body {
+  background-color: var(--bg);
+  color: var(--text);
+}
+
+/* ── Remap clases Tailwind en light mode ──────────────────────────────────── */
+
+/* Backgrounds */
+html:not(.dark) .bg-black       { background-color: #ffffff !important; }
+html:not(.dark) .bg-zinc-950    { background-color: #fafafa !important; }
+html:not(.dark) .bg-zinc-900    { background-color: #f3f4f6 !important; }
+html:not(.dark) .bg-zinc-800    { background-color: #e5e7eb !important; }
+html:not(.dark) .bg-zinc-700    { background-color: #d1d5db !important; }
+
+/* Text */
+html:not(.dark) .text-white     { color: #09090b !important; }
+html:not(.dark) .text-zinc-100  { color: #18181b !important; }
+html:not(.dark) .text-zinc-200  { color: #27272a !important; }
+html:not(.dark) .text-zinc-300  { color: #374151 !important; }
+html:not(.dark) .text-zinc-400  { color: #52525b !important; }
+html:not(.dark) .text-zinc-500  { color: #6b7280 !important; }
+html:not(.dark) .text-zinc-600  { color: #4b5563 !important; }
+html:not(.dark) .text-zinc-700  { color: #374151 !important; }
+
+/* Borders */
+html:not(.dark) .border-zinc-800 { border-color: #e5e7eb !important; }
+html:not(.dark) .border-zinc-700 { border-color: #d1d5db !important; }
+html:not(.dark) .border-zinc-600 { border-color: #9ca3af !important; }
+
+/* Hover */
+html:not(.dark) .hover\:bg-zinc-900:hover { background-color: #f3f4f6 !important; }
+html:not(.dark) .hover\:bg-zinc-800:hover { background-color: #e5e7eb !important; }
+html:not(.dark) .hover\:text-white:hover  { color: #09090b !important; }
+
+/* Gradients */
+html:not(.dark) .from-zinc-600 { --tw-gradient-from: #9ca3af; }
+html:not(.dark) .to-zinc-800   { --tw-gradient-to: #e5e7eb; }
+
+/* Placeholders */
+html:not(.dark) .placeholder-zinc-500::placeholder { color: #9ca3af !important; }
+html:not(.dark) .placeholder-zinc-600::placeholder { color: #6b7280 !important; }
+
+/* ── Inputs globales en light ─────────────────────────────────────────────── */
+html:not(.dark) input,
+html:not(.dark) textarea,
+html:not(.dark) select {
+  background-color: #ffffff !important;
+  border-color:     #d1d5db !important;
+  color:            #09090b !important;
+}
+html:not(.dark) input::placeholder,
+html:not(.dark) textarea::placeholder { color: #9ca3af !important; }
+html:not(.dark) input:focus,
+html:not(.dark) textarea:focus,
+html:not(.dark) select:focus {
+  border-color: #6b7280 !important;
+  outline: none;
+}
+
+/* ── Header — SIEMPRE oscuro ──────────────────────────────────────────────── */
+header {
+  background-color: #000000 !important;
+  border-color:     #27272a !important;
+}
+/* Overrides de light mode dentro del header */
+html:not(.dark) header .text-white   { color: #ffffff !important; }
+html:not(.dark) header .text-zinc-400 { color: #a1a1aa !important; }
+html:not(.dark) header .text-zinc-500 { color: #71717a !important; }
+html:not(.dark) header .bg-zinc-900  { background-color: #18181b !important; }
+html:not(.dark) header .bg-zinc-800  { background-color: #27272a !important; }
+html:not(.dark) header .bg-zinc-700  { background-color: #3f3f46 !important; }
+html:not(.dark) header .border-zinc-700 { border-color: #3f3f46 !important; }
+html:not(.dark) header input {
+  background-color: #18181b !important;
+  border-color:     #3f3f46 !important;
+  color:            #e4e4e7 !important;
+}
+html:not(.dark) header input::placeholder { color: #71717a !important; }
+
+/* ── Sidebars en light ─────────────────────────────────────────────────────── */
+html:not(.dark) aside {
+  background-color: #ffffff !important;
+  border-color:     #e5e7eb !important;
+}
+html:not(.dark) aside .text-white    { color: #09090b !important; }
+html:not(.dark) aside .text-zinc-400 { color: #52525b !important; }
+html:not(.dark) aside .text-zinc-500 { color: #6b7280 !important; }
+html:not(.dark) aside .text-zinc-600 { color: #52525b !important; }
+html:not(.dark) aside .text-zinc-700 { color: #374151 !important; }
+html:not(.dark) aside .hover\:bg-zinc-900:hover { background-color: #f3f4f6 !important; }
+html:not(.dark) aside .bg-zinc-800 { background-color: #e5e7eb !important; }
+
+/* ── bg-white / text-black para botones primarios ─────────────────────────── */
+html:not(.dark) .bg-white          { background-color: #18181b !important; }
+html:not(.dark) .text-black        { color: #ffffff !important; }
+
+/* ── Sombra sutil en tarjetas en light ───────────────────────────────────── */
+html:not(.dark) .rounded-2xl,
+html:not(.dark) .rounded-xl {
+  box-shadow: 0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.05);
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar        { width: 4px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: #3f3f46; border-radius: 2px; }
+html:not(.dark) ::-webkit-scrollbar-thumb { background: #d1d5db; }
+
+/* ── Transiciones suaves al cambiar tema ──────────────────────────────────── */
+body, aside, main, .rounded-xl, .rounded-2xl, input, textarea, select {
+  transition: background-color 0.18s ease, border-color 0.12s ease, color 0.12s ease;
+}

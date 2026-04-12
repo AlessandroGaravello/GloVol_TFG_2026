@@ -1,0 +1,10 @@
+---
+export const prerender = false;
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import WarCrimesPage from '../../components/war-crimes/WarCrimesPage';
+---
+<BaseLayout title="Crímenes de Guerra" showSidebars={true} currentPath="/war-crimes">
+  <div class="px-4 py-2">
+    <WarCrimesPage client:load />
+  </div>
+</BaseLayout>

@@ -1,0 +1,9 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PostDetailPage from '../../components/posts/PostDetailPage';
+const { postId } = Astro.params;
+export const prerender = false;
+---
+<BaseLayout title="Post" showSidebars={true} currentPath="/posts">
+  <PostDetailPage postId={postId!} client:load />
+</BaseLayout>

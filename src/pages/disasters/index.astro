@@ -1,0 +1,10 @@
+---
+export const prerender = false;
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import DisastersPage from '../../components/disasters/DisastersPage';
+---
+<BaseLayout title="Catástrofes" showSidebars={true} currentPath="/disasters">
+  <div class="px-4 py-2">
+    <DisastersPage client:load />
+  </div>
+</BaseLayout>

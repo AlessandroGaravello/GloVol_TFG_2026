@@ -1,0 +1,12 @@
+---
+export const prerender = false;
+
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import AdminPanel from '../../components/admin/AdminPanel';
+---
+
+<BaseLayout title="Panel de Administración" showSidebars={false}>
+  <div class="pt-14 min-h-screen" style="background: var(--bg);">
+    <AdminPanel client:load />
+  </div>
+</BaseLayout>

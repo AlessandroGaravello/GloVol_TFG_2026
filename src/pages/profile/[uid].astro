@@ -1,0 +1,11 @@
+---
+export const prerender = false;
+
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ProfilePage from '../../components/profile/ProfilePage';
+
+const { uid } = Astro.params;
+---
+<BaseLayout title="Perfil" showSidebars={true} currentPath="/profile">
+  <ProfilePage userId={uid!} client:load />
+</BaseLayout>

@@ -1,0 +1,10 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import DisasterFeed from '../components/feed/DisasterFeed';
+---
+
+<BaseLayout title="Inicio" showSidebars={true} currentPath="/">
+  <div class="px-4 py-2">
+    <DisasterFeed client:load />
+  </div>
+</BaseLayout>

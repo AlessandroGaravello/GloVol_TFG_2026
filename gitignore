@@ -1,0 +1,29 @@
+# ── Credenciales y secretos — NUNCA subir a GitHub ──────────────────────────
+scripts/serviceAccountKey.json
+*.pem
+*.key
+.env
+.env.*
+!.env.example
+
+# ── Dependencias ──────────────────────────────────────────────────────────────
+node_modules/
+scripts/node_modules/
+
+# ── Build de Astro ────────────────────────────────────────────────────────────
+dist/
+.astro/
+
+# ── Sistema operativo ─────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── IDEs y editores ───────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*

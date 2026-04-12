@@ -1,0 +1,7 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ProfilePage from '../../components/profile/ProfilePage';
+---
+<BaseLayout title="Mi perfil" showSidebars={true} currentPath="/profile/me">
+  <ProfilePage userId="me" client:load />
+</BaseLayout>
