@@ -10,6 +10,7 @@
   "dependencies": {
     "@astrojs/react": "^4.0.0",
     "@astrojs/tailwind": "^5.0.0",
+    "@astrojs/vercel": "^10.0.4",
     "astro": "^5.0.0",
     "firebase": "^11.0.0",
     "firebase-admin": "^13.7.0",
