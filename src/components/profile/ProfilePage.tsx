@@ -28,6 +28,16 @@ interface VerifiedProfile {
 }
 type TabKey = 'posts' | 'volunteers' | 'donations' | 'about';
 
+interface VolunteerEntry {
+  id: string;
+  userId: string;
+  disasterId: string;
+  postId: string;
+  status: string;
+  registeredAt: any;
+  disasterTitle?: string;
+}
+
 const COUNTRY_NAMES: Record<string, string> = {
   ES:'🇪🇸 España', UA:'🇺🇦 Ucrania', US:'🇺🇸 EEUU', FR:'🇫🇷 Francia',
   DE:'🇩🇪 Alemania', GB:'🇬🇧 Reino Unido', MA:'🇲🇦 Marruecos', TR:'🇹🇷 Turquía',
@@ -40,27 +50,26 @@ function joinedDate(ts: any): string {
   return d.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ProfilePage
-// ─────────────────────────────────────────────────────────────────────────────
 export default function ProfilePage({ userId }: { userId: string }) {
   const lang = useLang();
 
-  // authResolved: false mientras esperamos a Firebase Auth
-  // currentUser: null = no autenticado, objeto = autenticado
   const [authResolved, setAuthResolved] = useState(false);
   const [currentUser,  setCurrentUser]  = useState<any>(null);
 
-  const [userData,    setUserData]    = useState<UserData | null>(null);
-  const [vpData,      setVpData]      = useState<VerifiedProfile | null>(null);
-  const [posts,       setPosts]       = useState<any[]>([]);
-  const [isFollowing, setIsFollowing] = useState(false);
-  const [loading,     setLoading]     = useState(true);
-  const [notFound,    setNotFound]    = useState(false);
-  const [tab,         setTab]         = useState<TabKey>('posts');
-  const [isOwn,       setIsOwn]       = useState(false);
+  const [userData,        setUserData]    = useState<UserData | null>(null);
+  const [vpData,          setVpData]      = useState<VerifiedProfile | null>(null);
+  const [posts,           setPosts]       = useState<any[]>([]);
+  const [volunteerEntries, setVolunteerEntries] = useState<VolunteerEntry[]>([]);
+  const [isFollowing,     setIsFollowing] = useState(false);
+  const [loading,         setLoading]     = useState(true);
+  const [notFound,        setNotFound]    = useState(false);
+  const [tab,             setTab]         = useState<TabKey>('posts');
+  const [isOwn,           setIsOwn]       = useState(false);
+  
+  // Paginación para voluntariado
+  const [volunteerPage, setVolunteerPage] = useState(1);
+  const VOLUNTEERS_PER_PAGE = 5;
 
-  // ── Modales de creación ─────────────────────────────────────────────────
   const [showCreateDisaster, setShowCreateDisaster] = useState(false);
   const [showCreatePost,     setShowCreatePost]     = useState(false);
   const [successMsg,         setSuccessMsg]         = useState('');
@@ -76,17 +85,16 @@ export default function ProfilePage({ userId }: { userId: string }) {
 
   // ── Paso 2: Cargar datos SOLO cuando auth está resuelto ───────────────
   useEffect(() => {
-    if (!authResolved) return; // Aún esperando a Firebase Auth
-
+    if (!authResolved) return;
     loadProfile();
   }, [authResolved, userId]);
 
   const loadProfile = async () => {
     setLoading(true);
     setNotFound(false);
+    setVolunteerPage(1); // reiniciar página al cargar perfil
 
     try {
-      // Resolver el UID objetivo
       let targetId: string;
       if (userId === 'me') {
         if (!auth.currentUser) {
@@ -168,6 +176,35 @@ export default function ProfilePage({ userId }: { userId: string }) {
         }
       }
 
+      // ── Cargar voluntariados del usuario ──────────────────────────────
+      try {
+        const volSnap = await getDocs(query(
+          collection(db, 'volunteers'),
+          where('userId', '==', targetId)
+        ));
+        const entries = await Promise.all(volSnap.docs.map(async docSnap => {
+          const v = { id: docSnap.id, ...docSnap.data() } as VolunteerEntry;
+          try {
+            const dis = await getDoc(doc(db, 'disasters', v.disasterId));
+            if (dis.exists()) {
+              v.disasterTitle = dis.data().title;
+            }
+          } catch (err) {
+            console.warn('Error cargando disaster:', err);
+          }
+          return v;
+        }));
+        // Ordenar por fecha descendente (más reciente primero)
+        entries.sort((a, b) => {
+          const ta = a.registeredAt?.toMillis?.() ?? 0;
+          const tb = b.registeredAt?.toMillis?.() ?? 0;
+          return tb - ta;
+        });
+        setVolunteerEntries(entries);
+      } catch (err) {
+        console.error('Error cargando voluntariados:', err);
+      }
+
       // ¿Está siguiendo?
       if (auth.currentUser && auth.currentUser.uid !== targetId) {
         try {
@@ -185,7 +222,6 @@ export default function ProfilePage({ userId }: { userId: string }) {
     }
   };
 
-  // ── Follow / Unfollow ──────────────────────────────────────────────────
   const handleFollow = async () => {
     if (!auth.currentUser || !userData) return;
     const uid = auth.currentUser.uid;
@@ -196,7 +232,6 @@ export default function ProfilePage({ userId }: { userId: string }) {
     if (isFollowing) {
       await deleteDoc(followRef);
       await deleteDoc(followerRef);
-      // Actualizar contadores en Firestore
       await updateDoc(targetUserRef,  { followersCount: increment(-1) });
       await updateDoc(currentUserRef, { followingCount: increment(-1) });
       setIsFollowing(false);
@@ -204,7 +239,6 @@ export default function ProfilePage({ userId }: { userId: string }) {
     } else {
       await setDoc(followRef,   { followingId: userData.uid, followedAt: new Date() });
       await setDoc(followerRef, { followerId: uid, followedAt: new Date() });
-      // Actualizar contadores en Firestore
       await updateDoc(targetUserRef,  { followersCount: increment(1) });
       await updateDoc(currentUserRef, { followingCount: increment(1) });
       setIsFollowing(true);
@@ -212,7 +246,6 @@ export default function ProfilePage({ userId }: { userId: string }) {
     }
   };
 
-  // ── Estados de carga ───────────────────────────────────────────────────
   if (!authResolved || loading) return (
     <div className="max-w-2xl mx-auto px-4 py-8">
       <div className="animate-pulse space-y-4">
@@ -247,7 +280,6 @@ export default function ProfilePage({ userId }: { userId: string }) {
     </div>
   );
 
-  // ── Renderizado ────────────────────────────────────────────────────────
   const badgeType: BadgeType = getBadgeType({
     role: userData.role,
     isVerified: userData.isVerified,
@@ -261,7 +293,7 @@ export default function ProfilePage({ userId }: { userId: string }) {
 
   const TABS: { key: TabKey; label: string; count?: number }[] = [
     { key: 'posts',      label: 'Posts',       count: canPost ? posts.length : undefined },
-    { key: 'volunteers', label: 'Voluntariado', count: userData.volunteerEventsCount },
+    { key: 'volunteers', label: 'Voluntariado', count: volunteerEntries.length },
     { key: 'donations',  label: 'Donaciones' },
     { key: 'about',      label: 'Sobre mí' },
   ];
@@ -273,13 +305,13 @@ export default function ProfilePage({ userId }: { userId: string }) {
       <div className="px-4 pt-6 pb-4">
         <div className="flex items-start gap-4">
 
-          {/* Avatar con badge superpuesto */}
+          {/* Avatar con badge superpuesto - mejorado para modo claro/oscuro */}
           <div className="relative flex-shrink-0">
             {userData.profilePicture ? (
               <img src={userData.profilePicture} alt={userData.displayName}
-                className="w-20 h-20 rounded-full object-cover border-2 border-zinc-700" />
+                className="w-20 h-20 rounded-full object-cover border-2 border-zinc-300 dark:border-zinc-700" />
             ) : (
-              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-zinc-600 to-zinc-800 border-2 border-zinc-700 flex items-center justify-center text-white text-2xl font-bold">
+              <div className="w-20 h-20 rounded-full bg-zinc-200 dark:bg-zinc-700 border-2 border-zinc-300 dark:border-zinc-700 flex items-center justify-center text-zinc-800 dark:text-white text-2xl font-bold">
                 {initials}
               </div>
             )}
@@ -341,9 +373,8 @@ export default function ProfilePage({ userId }: { userId: string }) {
           </div>
         </div>
 
-        {/* ── Estadísticas + badge (fila como en el Figma) ── */}
+        {/* ── Estadísticas + badge ── */}
         <div className="flex items-center gap-5 mt-4 px-1 flex-wrap">
-          {/* Badge verificado — aparece como icono en la fila de stats */}
           {badgeType && (
             <ProfileBadge type={badgeType} size="md" showLabel />
           )}
@@ -375,7 +406,6 @@ export default function ProfilePage({ userId }: { userId: string }) {
 
         {/* ── Botones ── */}
         <div className="flex flex-col gap-2 mt-4">
-          {/* Fila 1: editar / seguir / mensaje */}
           <div className="flex items-center gap-2">
             {isOwn ? (
               <a href="/profile/edit"
@@ -400,7 +430,6 @@ export default function ProfilePage({ userId }: { userId: string }) {
             )}
           </div>
 
-          {/* Fila 2: botones de publicación (solo para propietario verificado) */}
           {isOwn && canPost && (
             <div className="flex items-center gap-2">
               <button
@@ -426,7 +455,6 @@ export default function ProfilePage({ userId }: { userId: string }) {
             </div>
           )}
 
-          {/* Toast de éxito */}
           {successMsg && (
             <div className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm"
               style={{ background: '#22c55e20', border: '1px solid #22c55e40', color: '#4ade80' }}>
@@ -488,14 +516,62 @@ export default function ProfilePage({ userId }: { userId: string }) {
         )}
 
         {tab === 'volunteers' && (
-          <div className="text-center py-12">
-            <p className="text-3xl mb-3">🙋</p>
-            <p className="text-white font-semibold mb-1">{userData.volunteerEventsCount} eventos de voluntariado</p>
-            <p className="text-zinc-500 text-sm">
-              {userData.volunteerEventsCount === 0
-                ? 'Todavía no ha participado en ningún evento.'
-                : 'Ha participado en emergencias y catástrofes.'}
-            </p>
+          <div>
+            {volunteerEntries.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-3xl mb-3">🙋</p>
+                <p className="text-zinc-500 text-sm">Todavía no has participado en ningún evento de voluntariado.</p>
+              </div>
+            ) : (
+              <>
+                {/* Lista paginada */}
+                {volunteerEntries
+                  .slice((volunteerPage - 1) * VOLUNTEERS_PER_PAGE, volunteerPage * VOLUNTEERS_PER_PAGE)
+                  .map(v => (
+                    <a key={v.id} href={`/posts/${v.postId}`}
+                      className="block p-4 rounded-2xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition mb-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-white">{v.disasterTitle || v.disasterId}</p>
+                          <p className="text-xs text-zinc-500 mt-0.5">
+                            Inscrito el {v.registeredAt?.toDate ? v.registeredAt.toDate().toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) : 'fecha desconocida'}
+                          </p>
+                        </div>
+                        <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${
+                          v.status === 'deployed' ? 'text-green-400 bg-green-900/20 border-green-800/40' :
+                          v.status === 'registered' ? 'text-blue-400 bg-blue-900/20 border-blue-800/40' :
+                          'text-zinc-400 bg-zinc-800 border-zinc-700'
+                        }`}>
+                          {v.status === 'deployed' ? 'Desplegado' : v.status === 'registered' ? 'Registrado' : v.status}
+                        </span>
+                      </div>
+                    </a>
+                  ))}
+                
+                {/* Paginación */}
+                {volunteerEntries.length > VOLUNTEERS_PER_PAGE && (
+                  <div className="flex justify-center gap-2 mt-4">
+                    <button
+                      onClick={() => setVolunteerPage(p => Math.max(1, p - 1))}
+                      disabled={volunteerPage === 1}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      ← Anterior
+                    </button>
+                    <span className="text-xs text-zinc-500 px-2 py-1.5">
+                      Página {volunteerPage} de {Math.ceil(volunteerEntries.length / VOLUNTEERS_PER_PAGE)}
+                    </span>
+                    <button
+                      onClick={() => setVolunteerPage(p => Math.min(Math.ceil(volunteerEntries.length / VOLUNTEERS_PER_PAGE), p + 1))}
+                      disabled={volunteerPage === Math.ceil(volunteerEntries.length / VOLUNTEERS_PER_PAGE)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Siguiente →
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
 

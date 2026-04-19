@@ -35,7 +35,17 @@
     { "collectionGroup": "comments", "queryScope": "COLLECTION",
       "fields": [{"fieldPath":"postId","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}] },
     { "collectionGroup": "verificationRequests", "queryScope": "COLLECTION",
-      "fields": [{"fieldPath":"status","order":"ASCENDING"},{"fieldPath":"requestType","order":"ASCENDING"},{"fieldPath":"submittedAt","order":"ASCENDING"}] }
+      "fields": [{"fieldPath":"status","order":"ASCENDING"},{"fieldPath":"submittedAt","order":"ASCENDING"}] },
+    { "collectionGroup": "posts", "queryScope": "COLLECTION",
+      "fields": [{"fieldPath":"needsDonations","order":"ASCENDING"},{"fieldPath":"donationApprovalStatus","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}] },
+    { "collectionGroup": "reports", "queryScope": "COLLECTION",
+      "fields": [{"fieldPath":"status","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}] },
+    { "collectionGroup": "users", "queryScope": "COLLECTION",
+      "fields": [{"fieldPath":"isVerified","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}] },
+    { "collectionGroup": "users", "queryScope": "COLLECTION",
+      "fields": [{"fieldPath":"verificationStatus","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}] },
+    { "collectionGroup": "users", "queryScope": "COLLECTION",
+      "fields": [{"fieldPath":"isActive","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}] }
   ],
   "fieldOverrides": []
 }

@@ -20,7 +20,6 @@ export default function FollowList({ userId, mode }: Props) {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [following, setFollowing]     = useState<Record<string, boolean>>({});
   const [busy, setBusy]               = useState<Record<string, boolean>>({});
-  const [debugMsg, setDebugMsg]       = useState('');
 
   useEffect(() => { return onAuthStateChanged(auth, u => setCurrentUser(u)); }, []);
   useEffect(() => { load(); }, [userId, mode]);
@@ -43,10 +42,6 @@ export default function FollowList({ userId, mode }: Props) {
     try {
       const subCol = mode === 'followers' ? 'followers' : 'following';
       const subSnap = await getDocs(collection(db, 'users', userId, subCol));
-      setDebugMsg(`${subCol}: ${subSnap.docs.length} docs`);
-      console.log('[FollowList] userId=' + userId + ' mode=' + mode + ' docs=' + subSnap.docs.length);
-      subSnap.docs.forEach(d => console.log('  id:', d.id, JSON.stringify(d.data())));
-
       const ids = subSnap.docs.map(d => {
         const data = d.data();
         return (mode === 'followers' ? (data.followerId || d.id) : (data.followingId || d.id)) as string;
@@ -69,7 +64,7 @@ export default function FollowList({ userId, mode }: Props) {
       }))).filter((u): u is UserItem => u !== null);
 
       setUsers(items);
-    } catch (e) { console.error('[FollowList]', e); setDebugMsg('Error: ' + String(e)); }
+    } catch (e) { console.error('[FollowList]', e); }
     finally { setLoading(false); }
   };
 
@@ -113,11 +108,6 @@ export default function FollowList({ userId, mode }: Props) {
 
   return (
     <div>
-      {debugMsg && (
-        <div className="px-4 py-2 bg-zinc-900 border-b border-zinc-800">
-          <p className="text-xs text-zinc-500 font-mono">[debug] {debugMsg}</p>
-        </div>
-      )}
       {users.length > 5 && (
         <div className="px-4 py-3 border-b border-zinc-800">
           <input type="text" value={search} onChange={e => setSearch(e.target.value)}
@@ -139,7 +129,7 @@ export default function FollowList({ userId, mode }: Props) {
               <a href={`/profile/${u.uid}`} className="flex-shrink-0">
                 {u.profilePicture
                   ? <img src={u.profilePicture} alt={u.displayName} className="w-10 h-10 rounded-full object-cover"/>
-                  : <div className="w-10 h-10 rounded-full bg-gradient-to-br from-zinc-600 to-zinc-800 flex items-center justify-center text-white text-sm font-bold">{u.displayName.charAt(0).toUpperCase()}</div>
+                  : <div className="w-10 h-10 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-zinc-800 dark:text-white text-sm font-bold">{u.displayName.charAt(0).toUpperCase()}</div>
                 }
               </a>
               <a href={`/profile/${u.uid}`} className="flex-1 min-w-0">

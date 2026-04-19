@@ -302,7 +302,6 @@ function CommentsSection({ postId, currentUser, onCommentAdded }: {
 
   useEffect(() => {
     setLoading(true);
-    // Intentar con onSnapshot primero; si falla por índice, caer a getDocs
     const q = query(
       collection(db, 'posts', postId, 'comments'),
       orderBy('createdAt', 'asc'),
@@ -343,7 +342,6 @@ function CommentsSection({ postId, currentUser, onCommentAdded }: {
         if (uSnap.exists()) authorName = uSnap.data().displayName || authorName;
       } catch {}
 
-      // Los campos deben coincidir exactamente con las reglas de Firestore
       await addDoc(collection(db, 'posts', postId, 'comments'), {
         postId,
         authorId: currentUser.uid,
@@ -383,9 +381,8 @@ function CommentsSection({ postId, currentUser, onCommentAdded }: {
         {comments.length > 0 ? `${comments.length} comentario${comments.length !== 1 ? 's' : ''}` : 'Comentarios'}
       </h2>
 
-      {/* Input para nuevo comentario */}
       <div className="flex gap-3 mb-5">
-        <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+        <div className="w-8 h-8 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-zinc-800 dark:text-white text-xs font-bold flex-shrink-0">
           {currentUser ? (currentUser.displayName?.charAt(0) || currentUser.email?.charAt(0) || '?').toUpperCase() : '?'}
         </div>
         <div className="flex-1">
@@ -416,7 +413,6 @@ function CommentsSection({ postId, currentUser, onCommentAdded }: {
         </div>
       </div>
 
-      {/* Lista de comentarios */}
       {loading ? (
         <div className="flex flex-col gap-3">
           {[1,2,3].map(i => (
@@ -439,7 +435,7 @@ function CommentsSection({ postId, currentUser, onCommentAdded }: {
           {comments.map(c => (
             <div key={c.commentId} className="flex gap-3">
               <a href={`/profile/${c.authorId}`} className="flex-shrink-0">
-                <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center text-white text-xs font-bold hover:opacity-80 transition">
+                <div className="w-8 h-8 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-zinc-800 dark:text-white text-xs font-bold hover:opacity-80 transition">
                   {(c.authorName || '?').charAt(0).toUpperCase()}
                 </div>
               </a>
@@ -492,7 +488,7 @@ export default function PostDetailPage({ postId }: { postId: string }) {
   const [joined,  setJoined]  = useState(false);
   const [joining, setJoining] = useState(false);
   const [isFollowingAuthor, setIsFollowingAuthor] = useState(false);
-  const [followingAuthor, setFollowingAuthor] = useState(false); // loading state
+  const [followingAuthor, setFollowingAuthor] = useState(false);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('info');
   const [showShare, setShowShare] = useState(false);
@@ -502,7 +498,6 @@ export default function PostDetailPage({ postId }: { postId: string }) {
 
   useEffect(() => { return onAuthStateChanged(auth, setCurrentUser); }, []);
 
-  // Detectar hash #comentarios en URL
   useEffect(() => {
     if (window.location.hash === '#comentarios') {
       setTab('comments');
@@ -513,33 +508,33 @@ export default function PostDetailPage({ postId }: { postId: string }) {
     loadAll();
   }, [postId]);
 
-  // ── Voluntarios en tiempo real ─────────────────────────────────────────────
+  // ── Voluntarios en tiempo real (deduplicado por usuario) ──────────────────
   useEffect(() => {
     if (!postId) return;
-    // Sin orderBy para evitar índice compuesto. Ordenamos en cliente.
     const q = query(
       collection(db, 'volunteers'),
       where('postId', '==', postId),
-      limit(50)
+      limit(100)
     );
     const unsub = onSnapshot(q, async snap => {
-      const vols = await Promise.all(snap.docs.map(async d => {
-        const v = { volunteerId: d.id, ...d.data() } as VolunteerData;
-        try {
-          const uSnap = await getDoc(doc(db, 'users', v.userId));
-          if (uSnap.exists()) v.userDisplayName = uSnap.data().displayName;
-        } catch {}
-        return v;
-      }));
-      // Ordenar por registeredAt descendente en cliente
-      vols.sort((a: any, b: any) => {
-        const ta = (a.registeredAt as any)?.toMillis?.() ?? 0;
-        const tb = (b.registeredAt as any)?.toMillis?.() ?? 0;
-        return tb - ta;
-      });
-      setVolunteers(vols);
-      // Actualizar contador del post en tiempo real
-      setPost(p => p ? { ...p, volunteerCount: vols.length } : p);
+      const map = new Map<string, VolunteerData>();
+      for (const docSnap of snap.docs) {
+        const v = { volunteerId: docSnap.id, ...docSnap.data() } as VolunteerData;
+        const existing = map.get(v.userId);
+        const currentTime = v.registeredAt?.toMillis?.() ?? 0;
+        const existingTime = existing?.registeredAt?.toMillis?.() ?? 0;
+        if (!existing || currentTime > existingTime) {
+          try {
+            const uSnap = await getDoc(doc(db, 'users', v.userId));
+            if (uSnap.exists()) v.userDisplayName = uSnap.data().displayName;
+          } catch {}
+          map.set(v.userId, v);
+        }
+      }
+      const uniqueVols = Array.from(map.values());
+      uniqueVols.sort((a, b) => (b.registeredAt?.toMillis?.() ?? 0) - (a.registeredAt?.toMillis?.() ?? 0));
+      setVolunteers(uniqueVols);
+      setPost(p => p ? { ...p, volunteerCount: uniqueVols.length } : p);
     }, err => console.error('onSnapshot volunteers:', err));
     return () => unsub();
   }, [postId]);
@@ -563,8 +558,6 @@ export default function PostDetailPage({ postId }: { postId: string }) {
 
       const disSnap = await getDoc(doc(db, 'disasters', p.disasterId));
       if (disSnap.exists()) setDisaster({ disasterId: disSnap.id, ...disSnap.data() } as DisasterData);
-
-      // Volunteers se carga en tiempo real via onSnapshot (ver useEffect separado)
 
       const relSnap = await getDocs(query(
         collection(db, 'posts'),
@@ -597,7 +590,6 @@ export default function PostDetailPage({ postId }: { postId: string }) {
         setLiked(likeSnap.exists());
         const volCheckSnap = await getDoc(doc(db, 'volunteers', `${postId}_${auth.currentUser.uid}`));
         setJoined(volCheckSnap.exists());
-        // Comprobar si ya sigue al autor
         try {
           const followSnap = await getDoc(doc(db, 'users', auth.currentUser.uid, 'following', p.authorId));
           setIsFollowingAuthor(followSnap.exists());
@@ -691,7 +683,7 @@ export default function PostDetailPage({ postId }: { postId: string }) {
   const TABS: {key:Tab;label:string;badge?:number}[] = [
     {key:'info', label:'Post'},
     {key:'comments', label:'Comentarios', badge: commentsCount},
-    {key:'volunteers', label:'Voluntarios', badge: post.volunteerCount},
+    {key:'volunteers', label:'Voluntarios', badge: volunteers.length},
     {key:'donations', label:'Donaciones'},
     {key:'related', label:`#${post.disasterId}`, badge: relatedPosts.length},
   ];
@@ -699,7 +691,6 @@ export default function PostDetailPage({ postId }: { postId: string }) {
   return (
     <div className="max-w-2xl mx-auto">
 
-      {/* ── Cabecera ── */}
       <div className="px-4 pt-4 pb-2 flex items-center gap-2 border-b border-zinc-800">
         <a href="/" className="p-1.5 text-zinc-500 hover:text-white transition rounded-lg hover:bg-zinc-900">
           <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -710,7 +701,6 @@ export default function PostDetailPage({ postId }: { postId: string }) {
         <a href={`/disasters/${post.disasterId}`} className="ml-auto text-xs font-mono text-blue-400/70 hover:text-blue-400 transition">
           #{post.disasterId}
         </a>
-        {/* Botón reporte en cabecera */}
         <button onClick={() => setShowReport(true)}
           className="ml-2 p-1.5 text-zinc-600 hover:text-red-400 transition rounded-lg hover:bg-zinc-900"
           title="Reportar post">
@@ -720,7 +710,6 @@ export default function PostDetailPage({ postId }: { postId: string }) {
         </button>
       </div>
 
-      {/* ── Tabs ── */}
       <div className="flex border-b border-zinc-800 overflow-x-auto">
         {TABS.map(tab_ => (
           <button key={tab_.key} onClick={() => setTab(tab_.key)}
@@ -736,13 +725,11 @@ export default function PostDetailPage({ postId }: { postId: string }) {
         ))}
       </div>
 
-      {/* ── TAB: POST ── */}
       {tab === 'info' && (
         <div className="px-4 pt-4">
-          {/* Autor */}
           <div className="flex items-center gap-3 mb-4">
             <a href={`/profile/${post.authorId}`} className="flex-shrink-0">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-zinc-600 to-zinc-800 flex items-center justify-center text-white text-sm font-bold hover:opacity-80 transition">
+              <div className="w-10 h-10 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-zinc-800 dark:text-white text-sm font-bold hover:opacity-80 transition">
                 {initials}
               </div>
             </a>
@@ -778,7 +765,6 @@ export default function PostDetailPage({ postId }: { postId: string }) {
           <h1 className="text-xl font-bold text-white leading-snug mb-3">{post.title}</h1>
           <p className="text-zinc-300 text-sm leading-relaxed mb-4 whitespace-pre-wrap">{post.content}</p>
 
-          {/* Media */}
           {post.media && post.media.length > 0 && (
             <div className={`mb-4 grid gap-2 ${post.media.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
               {post.media.map((m, i) => (
@@ -797,7 +783,6 @@ export default function PostDetailPage({ postId }: { postId: string }) {
             </div>
           )}
 
-          {/* Stats */}
           {disaster && (
             <div className="grid grid-cols-3 gap-3 mb-4">
               <div className={`rounded-xl border p-3 text-center ${SEVERITY_COLOR[disaster.severity] || 'text-zinc-400 bg-zinc-900 border-zinc-700'}`}>
@@ -815,9 +800,7 @@ export default function PostDetailPage({ postId }: { postId: string }) {
             </div>
           )}
 
-          {/* Acciones */}
           <div className="flex items-center gap-2 py-3 border-t border-zinc-800">
-            {/* Like */}
             <button onClick={handleLike}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition ${liked ? 'text-yellow-400' : 'text-zinc-500 hover:text-yellow-400 hover:bg-zinc-900'}`}>
               <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill={liked?'currentColor':'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -825,7 +808,6 @@ export default function PostDetailPage({ postId }: { postId: string }) {
               </svg>
               {post.likesCount}
             </button>
-            {/* Share funcional */}
             <button onClick={handleShare}
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-zinc-500 hover:text-blue-400 hover:bg-zinc-900 transition">
               <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -833,7 +815,6 @@ export default function PostDetailPage({ postId }: { postId: string }) {
               </svg>
               {shares}
             </button>
-            {/* Comentarios */}
             <button onClick={() => setTab('comments')}
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900 transition">
               <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -861,7 +842,6 @@ export default function PostDetailPage({ postId }: { postId: string }) {
         </div>
       )}
 
-      {/* ── TAB: COMENTARIOS ── */}
       {tab === 'comments' && (
         <CommentsSection
           postId={postId}
@@ -870,11 +850,10 @@ export default function PostDetailPage({ postId }: { postId: string }) {
         />
       )}
 
-      {/* ── TAB: VOLUNTARIOS ── */}
       {tab === 'volunteers' && (
         <div className="px-4 pt-4">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-white">{post.volunteerCount} voluntarios apuntados</h2>
+            <h2 className="text-sm font-semibold text-white">{volunteers.length} voluntarios apuntados</h2>
             {!joined && (
               <button onClick={handleVolunteer} disabled={joining}
                 className="text-xs px-3 py-1.5 rounded-full bg-white text-black font-semibold hover:opacity-90 transition">
@@ -893,7 +872,7 @@ export default function PostDetailPage({ postId }: { postId: string }) {
             <div className="flex flex-col gap-2">
               {volunteers.map(v => (
                 <div key={v.volunteerId} className="flex items-center gap-3 px-3 py-2.5 bg-zinc-900 rounded-xl">
-                  <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                  <div className="w-8 h-8 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-zinc-800 dark:text-white text-xs font-bold flex-shrink-0">
                     {v.userDisplayName?.charAt(0) || '?'}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -915,7 +894,6 @@ export default function PostDetailPage({ postId }: { postId: string }) {
         </div>
       )}
 
-      {/* ── TAB: DONACIONES ── */}
       {tab === 'donations' && (
         <div className="px-4 pt-4">
           <h2 className="text-sm font-semibold text-white mb-4">Donaciones del pool #{post.disasterId}</h2>
@@ -968,7 +946,6 @@ export default function PostDetailPage({ postId }: { postId: string }) {
         </div>
       )}
 
-      {/* ── TAB: POSTS RELACIONADOS ── */}
       {tab === 'related' && (
         <div className="px-4 pt-4">
           <div className="flex items-center justify-between mb-4">
@@ -1008,7 +985,6 @@ export default function PostDetailPage({ postId }: { postId: string }) {
 
       <div className="h-8"/>
 
-      {/* Modals */}
       {showShare && <ShareModal postId={postId} title={post.title} onClose={() => setShowShare(false)} />}
       {showReport && <ReportModal postId={postId} onClose={() => setShowReport(false)} />}
     </div>

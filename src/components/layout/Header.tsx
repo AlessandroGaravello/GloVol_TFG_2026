@@ -2,19 +2,29 @@ import { useState, useEffect } from 'react';
 import { auth } from '../../lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import type { User } from 'firebase/auth';
-import { LANGUAGES, setLang, t, type LangCode } from '../../lib/i18n';
-import { useLang } from '../../hooks/useLang';
+import { LANGUAGES, setLang, t, getLang, type LangCode } from '../../lib/i18n';
 
-// ── Theme hook ─────────────────────────────────────────────────────────────
 function useTheme() {
-  const [dark, setDark] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true;
+  const [dark, setDark] = useState<boolean | undefined>(undefined);
+
+  useEffect(() => {
     const saved = localStorage.getItem('glovol_theme');
-    if (saved) return saved === 'dark';
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
-  });
+    let isDark: boolean;
+    if (saved) {
+      isDark = saved === 'dark';
+    } else {
+      isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    setDark(isDark);
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, []);
 
   const toggle = () => {
+    if (dark === undefined) return;
     const next = !dark;
     setDark(next);
     localStorage.setItem('glovol_theme', next ? 'dark' : 'light');
@@ -25,22 +35,24 @@ function useTheme() {
     }
   };
 
-  // Sync on mount in case BaseLayout already set the class
-  useEffect(() => {
-    const isDark = document.documentElement.classList.contains('dark');
-    setDark(isDark);
-  }, []);
-
   return { dark, toggle };
 }
 
-// ── Component ──────────────────────────────────────────────────────────────
 export default function Header() {
-  const [user, setUser]       = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
-  const lang = useLang();
+  const [lang, setLangState] = useState<LangCode>(getLang());
   const { dark, toggle } = useTheme();
+
+  // Escuchar cambios de idioma desde otros componentes
+  useEffect(() => {
+    const handler = (e: Event) => {
+      setLangState((e as CustomEvent).detail as LangCode);
+    };
+    window.addEventListener('glovol:lang', handler);
+    return () => window.removeEventListener('glovol:lang', handler);
+  }, []);
 
   useEffect(() => {
     return onAuthStateChanged(auth, setUser);
@@ -53,23 +65,34 @@ export default function Header() {
 
   const handleLangChange = (code: LangCode) => {
     setLang(code);
+    setLangState(code);
     setLangOpen(false);
   };
 
   const currentLang = LANGUAGES.find(l => l.code === lang) ?? LANGUAGES[0];
+  const isRtl = lang === 'ar';
 
   return (
-    <header dir="ltr" className="fixed top-0 left-0 right-0 z-50 bg-black border-b border-zinc-800 h-14 flex items-center px-4 gap-4">
-
+    <header
+      dir={isRtl ? 'rtl' : 'ltr'}
+      className="fixed top-0 left-0 right-0 z-50 bg-black border-b border-zinc-800 h-14 flex items-center px-4 gap-4 w-full"
+    >
       {/* Logo */}
       <a href="/" className="flex items-center gap-1.5 flex-shrink-0">
         <span style={{ color: 'var(--gv-accent)' }} className="font-bold text-xl tracking-tight">GloVol</span>
       </a>
 
-      {/* Buscador */}
+      {/* Buscador centrado */}
       <div className="flex-1 max-w-md mx-auto">
         <div className="relative">
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
           </svg>
           <input
@@ -80,9 +103,8 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Acciones derecha */}
-      <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
-
+      {/* Contenedor de acciones (sin flex-row-reverse para que dir="rtl" haga la inversión) */}
+      <div className="flex items-center gap-2 flex-shrink-0">
         {/* Selector idioma */}
         <div className="relative">
           <button
@@ -165,29 +187,37 @@ export default function Header() {
           </a>
         )}
 
-        {/* Toggle dark/light — el mismo que en el mockup de Figma */}
+        {/* Toggle dark/light con corrección para RTL */}
         <button
           onClick={toggle}
           aria-label="Cambiar tema"
           className="relative inline-flex items-center flex-shrink-0"
         >
-          <span className={`
-            relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200
-            ${dark ? 'bg-zinc-600' : 'bg-zinc-300'}
-          `}>
-            {/* Círculo interior con icono */}
-            <span className={`
-              inline-flex h-5 w-5 items-center justify-center rounded-full bg-white shadow
-              transition-transform duration-200
-              ${dark ? 'translate-x-5' : 'translate-x-0.5'}
-            `}>
-              {dark ? (
-                /* luna */
+          <span
+            suppressHydrationWarning
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
+              dark === undefined ? 'bg-zinc-600' : dark ? 'bg-zinc-600' : 'bg-zinc-300'
+            }`}
+          >
+            <span
+              suppressHydrationWarning
+              className={`inline-flex h-5 w-5 items-center justify-center rounded-full bg-white shadow transition-transform duration-200 ${
+                dark === undefined
+                  ? 'translate-x-0.5 rtl:-translate-x-0.5'
+                  : dark
+                    ? 'translate-x-5 rtl:-translate-x-5'
+                    : 'translate-x-0.5 rtl:-translate-x-0.5'
+              }`}
+            >
+              {dark === undefined ? (
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-zinc-700" viewBox="0 0 24 24" fill="currentColor">
+                  <path fillRule="evenodd" d="M9.528 1.718a.75.75 0 01.162.819A8.97 8.97 0 009 6a9 9 0 009 9 8.97 8.97 0 003.463-.69.75.75 0 01.981.98 10.503 10.503 0 01-9.694 6.46c-5.799 0-10.5-4.701-10.5-10.5 0-4.368 2.667-8.112 6.46-9.694a.75.75 0 01.818.162z" clipRule="evenodd" />
+                </svg>
+              ) : dark ? (
                 <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-zinc-700" viewBox="0 0 24 24" fill="currentColor">
                   <path fillRule="evenodd" d="M9.528 1.718a.75.75 0 01.162.819A8.97 8.97 0 009 6a9 9 0 009 9 8.97 8.97 0 003.463-.69.75.75 0 01.981.98 10.503 10.503 0 01-9.694 6.46c-5.799 0-10.5-4.701-10.5-10.5 0-4.368 2.667-8.112 6.46-9.694a.75.75 0 01.818.162z" clipRule="evenodd" />
                 </svg>
               ) : (
-                /* sol */
                 <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-yellow-500" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM18.894 6.166a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.592-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z" />
                 </svg>

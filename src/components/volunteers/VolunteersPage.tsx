@@ -31,6 +31,10 @@ export default function VolunteersPage() {
   const [loading, setLoading]     = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [authResolved, setAuthResolved] = useState(false);
+  
+  // Paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 5;
 
   useEffect(() => {
     return onAuthStateChanged(auth, u => { setCurrentUser(u); setAuthResolved(true); });
@@ -66,8 +70,20 @@ export default function VolunteersPage() {
         return v;
       }));
       setEntries(enriched);
+      setCurrentPage(1); // resetear página al cargar nuevos datos
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
+  };
+
+  // Calcular entradas a mostrar en la página actual
+  const totalPages = Math.ceil(entries.length / ITEMS_PER_PAGE);
+  const paginatedEntries = entries.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= totalPages) setCurrentPage(page);
   };
 
   if (!authResolved || loading) return (
@@ -102,31 +118,56 @@ export default function VolunteersPage() {
           </a>
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
-          <p className="text-xs text-zinc-600">{entries.length} inscripción{entries.length !== 1 ? 'es' : ''}</p>
-          {entries.map(v => (
-            <a key={v.volunteerId} href={`/posts/${v.postId}`}
-              className="block p-4 rounded-2xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition">
-              <div className="flex items-start justify-between gap-3 mb-2">
-                <div>
-                  <p className="text-sm font-semibold text-white">{v.disasterTitle || v.disasterId}</p>
-                  <p className="text-xs text-zinc-500 mt-0.5 font-mono">#{v.disasterId}</p>
+        <>
+          <p className="text-xs text-zinc-600 mb-3">{entries.length} inscripción{entries.length !== 1 ? 'es' : ''}</p>
+          <div className="flex flex-col gap-3">
+            {paginatedEntries.map(v => (
+              <a key={v.volunteerId} href={`/posts/${v.postId}`}
+                className="block p-4 rounded-2xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition">
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div>
+                    <p className="text-sm font-semibold text-white">{v.disasterTitle || v.disasterId}</p>
+                    <p className="text-xs text-zinc-500 mt-0.5 font-mono">#{v.disasterId}</p>
+                  </div>
+                  <span className={`text-xs px-2 py-0.5 rounded-full border font-medium flex-shrink-0 ${STATUS_COLOR[v.status] || 'text-zinc-400 bg-zinc-800 border-zinc-700'}`}>
+                    {STATUS_LABEL[v.status] || v.status}
+                  </span>
                 </div>
-                <span className={`text-xs px-2 py-0.5 rounded-full border font-medium flex-shrink-0 ${STATUS_COLOR[v.status] || 'text-zinc-400 bg-zinc-800 border-zinc-700'}`}>
-                  {STATUS_LABEL[v.status] || v.status}
-                </span>
-              </div>
-              {v.skills && v.skills.length > 0 && (
-                <div className="flex gap-1 flex-wrap mb-2">
-                  {v.skills.slice(0, 4).map(s => (
-                    <span key={s} className="text-xs px-1.5 py-0.5 bg-zinc-800 text-zinc-400 rounded">{s}</span>
-                  ))}
-                </div>
-              )}
-              <p className="text-xs text-zinc-600">Inscrito el {timeAgo(v.registeredAt)}</p>
-            </a>
-          ))}
-        </div>
+                {v.skills && v.skills.length > 0 && (
+                  <div className="flex gap-1 flex-wrap mb-2">
+                    {v.skills.slice(0, 4).map(s => (
+                      <span key={s} className="text-xs px-1.5 py-0.5 bg-zinc-800 text-zinc-400 rounded">{s}</span>
+                    ))}
+                  </div>
+                )}
+                <p className="text-xs text-zinc-600">Inscrito el {timeAgo(v.registeredAt)}</p>
+              </a>
+            ))}
+          </div>
+
+          {/* Paginación */}
+          {totalPages > 1 && (
+            <div className="flex justify-center items-center gap-3 mt-6">
+              <button
+                onClick={() => goToPage(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                ← Anterior
+              </button>
+              <span className="text-xs text-zinc-500">
+                Página {currentPage} de {totalPages}
+              </span>
+              <button
+                onClick={() => goToPage(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Siguiente →
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

@@ -13,11 +13,23 @@ import { onAuthStateChanged } from 'firebase/auth';
 interface AdminUser { uid: string; role: string; }
 
 interface Report {
-  id: string; postId: string; reportedBy: string; reason: string;
-  extra?: string; status: string; createdAt: any;
+  id: string;
+  type?: 'post' | 'comment'; // si no existe, asumir 'post'
+  postId?: string;
+  commentId?: string;
+  reportedBy: string;
+  reason: string;
+  extra?: string;
+  status: string;
+  createdAt: any;
   // enriched
-  postTitle?: string; postAuthorId?: string; postIsActive?: boolean;
+  postTitle?: string;
+  postAuthorId?: string;
+  postIsActive?: boolean;
   reporterName?: string;
+  // para comentarios
+  commentContent?: string;
+  commentAuthorName?: string;
 }
 
 interface VerifRequest {
@@ -182,7 +194,7 @@ function DashboardTab({ stats, loading }: { stats: Stats; loading: boolean }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2. REPORTES
+// 2. REPORTES (mejorado para mostrar comentarios)
 // ─────────────────────────────────────────────────────────────────────────────
 function ReportsTab({ adminUid }: { adminUid: string }) {
   const [reports, setReports]   = useState<Report[]>([]);
@@ -204,13 +216,31 @@ function ReportsTab({ adminUid }: { adminUid: string }) {
       ));
       const raw = snap.docs.map(d => ({ id: d.id, ...d.data() } as Report));
 
-      // Enriquecer con datos del post y del reporter
+      // Enriquecer con datos del post o comentario y del reporter
       const enriched = await Promise.all(raw.map(async r => {
         try {
-          if (r.postId) {
+          // Si es reporte de comentario
+          if (r.type === 'comment' && r.commentId && r.postId) {
+            // Obtener comentario desde subcolección
+            const commentRef = doc(db, 'posts', r.postId, 'comments', r.commentId);
+            const commentSnap = await getDoc(commentRef);
+            if (commentSnap.exists()) {
+              const commentData = commentSnap.data();
+              r.commentContent = commentData.content;
+              r.commentAuthorName = commentData.authorName || 'Usuario';
+            }
+            // También obtener título del post para contexto
+            const postSnap = await getDoc(doc(db, 'posts', r.postId));
+            if (postSnap.exists()) {
+              r.postTitle = postSnap.data().title;
+              r.postAuthorId = postSnap.data().authorId;
+              r.postIsActive = postSnap.data().isActive;
+            }
+          } else if (r.postId) {
+            // Reporte de post normal
             const pSnap = await getDoc(doc(db, 'posts', r.postId));
             if (pSnap.exists()) {
-              r.postTitle   = pSnap.data().title;
+              r.postTitle = pSnap.data().title;
               r.postAuthorId = pSnap.data().authorId;
               r.postIsActive = pSnap.data().isActive;
             }
@@ -219,7 +249,9 @@ function ReportsTab({ adminUid }: { adminUid: string }) {
             const uSnap = await getDoc(doc(db, 'users', r.reportedBy));
             if (uSnap.exists()) r.reporterName = uSnap.data().displayName || uSnap.data().email;
           }
-        } catch {}
+        } catch (err) {
+          console.error('Error fetching report details:', err);
+        }
         return r;
       }));
       setReports(enriched);
@@ -272,7 +304,7 @@ function ReportsTab({ adminUid }: { adminUid: string }) {
 
   return (
     <div>
-      <SectionHeader title="Reportes" subtitle="Gestiona los reportes enviados por usuarios sobre posts" />
+      <SectionHeader title="Reportes" subtitle="Gestiona los reportes enviados por usuarios sobre posts o comentarios" />
 
       {/* Filtro */}
       <div className="flex gap-2 mb-5">
@@ -303,19 +335,37 @@ function ReportsTab({ adminUid }: { adminUid: string }) {
             <div key={r.id} className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
               <div className="flex items-start justify-between gap-4 mb-3">
                 <div className="flex-1 min-w-0">
-                  {/* Post referenciado */}
+                  {/* Tipo de reporte: Post o Comentario */}
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs text-zinc-500">Post:</span>
-                    {r.postId ? (
-                      <a href={`/posts/${r.postId}`} target="_blank"
-                        className="text-sm font-semibold text-white hover:text-zinc-300 transition truncate max-w-xs">
-                        {r.postTitle || r.postId}
-                      </a>
-                    ) : <span className="text-zinc-600 text-xs">Post eliminado</span>}
-                    {r.postIsActive === false && <Badge label="Oculto" color="orange" />}
+                    <Badge label={r.type === 'comment' ? '💬 Comentario' : '📄 Post'} color={r.type === 'comment' ? 'blue' : 'purple'} />
+                    <span className="text-xs text-zinc-500">ID: {r.id.slice(0,8)}</span>
                   </div>
+
+                  {/* Contenido reportado */}
+                  {r.type === 'comment' ? (
+                    <>
+                      <div className="mb-2">
+                        <p className="text-xs text-zinc-500 mb-1">Comentario reportado:</p>
+                        <div className="bg-zinc-800 rounded-lg p-2 text-sm text-white">
+                          {r.commentContent || 'Comentario no disponible'}
+                        </div>
+                        {r.commentAuthorName && (
+                          <p className="text-xs text-zinc-500 mt-1">Autor del comentario: {r.commentAuthorName}</p>
+                        )}
+                      </div>
+                      {r.postTitle && (
+                        <p className="text-xs text-zinc-500">En el post: <span className="text-white">{r.postTitle}</span></p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm font-semibold text-white truncate">{r.postTitle || r.postId}</p>
+                      {r.postAuthorId && <p className="text-xs text-zinc-500">Autor del post: {r.postAuthorId}</p>}
+                    </>
+                  )}
+
                   {/* Motivo */}
-                  <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap mt-2">
                     <Badge label={r.reason} color={REASON_COLOR[r.reason] || 'zinc'} />
                     {r.extra && (
                       <span className="text-xs text-zinc-500 italic">"{r.extra}"</span>
@@ -409,7 +459,6 @@ function VerificationsTab({ adminUid }: { adminUid: string }) {
   const approve = async (req: VerifRequest) => {
     setWorking(req.id);
     try {
-      // 1. Crear verifiedProfile
       const profileData: any = {
         userId: req.userId,
         type: req.requestType,
@@ -439,22 +488,17 @@ function VerificationsTab({ adminUid }: { adminUid: string }) {
       }
 
       await setDoc(doc(db, 'verifiedProfiles', req.userId), profileData);
-
-      // 2. Actualizar usuario
       await updateDoc(doc(db, 'users', req.userId), {
         isVerified: true,
         verificationStatus: 'approved',
         role: 'user',
         ...(req.requestsWarCrimePosting ? { warCrimesAccess: true } : {}),
       });
-
-      // 3. Actualizar solicitud
       await updateDoc(doc(db, 'verificationRequests', req.id), {
         status: 'approved',
         reviewedBy: adminUid,
         reviewedAt: serverTimestamp(),
       });
-
       showToast(`✓ Cuenta de ${req.userName || req.userId} verificada como ${req.requestType}.`);
       load();
     } catch (e: any) {
@@ -523,7 +567,6 @@ function VerificationsTab({ adminUid }: { adminUid: string }) {
         <div className="flex flex-col gap-3">
           {requests.map(r => (
             <div key={r.id} className="rounded-2xl border border-zinc-800 bg-zinc-900/40 overflow-hidden">
-              {/* Cabecera */}
               <div className="flex items-center gap-4 p-4">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-zinc-600 to-zinc-800 flex items-center justify-center text-white font-bold flex-shrink-0">
                   {(r.userName || '?').charAt(0).toUpperCase()}
@@ -545,11 +588,9 @@ function VerificationsTab({ adminUid }: { adminUid: string }) {
                 </button>
               </div>
 
-              {/* Detalle expandible */}
               {expanded === r.id && (
                 <div className="px-4 pb-4 border-t border-zinc-800 pt-4">
                   <div className="grid grid-cols-2 gap-4 mb-4">
-                    {/* Datos según tipo */}
                     {r.requestType === 'government' && (
                       <>
                         <DataField label="Entidad" value={r.governmentEntity} />
@@ -577,7 +618,6 @@ function VerificationsTab({ adminUid }: { adminUid: string }) {
                     )}
                   </div>
 
-                  {/* Documentos */}
                   {r.documents && r.documents.length > 0 && (
                     <div className="mb-4">
                       <p className="text-xs font-medium text-zinc-400 mb-2">Documentos adjuntos:</p>
@@ -596,7 +636,6 @@ function VerificationsTab({ adminUid }: { adminUid: string }) {
                     </div>
                   )}
 
-                  {/* Nota de rechazo si existe */}
                   {r.rejectionReason && (
                     <div className="mb-4 px-3 py-2 rounded-xl bg-red-900/20 border border-red-800/30">
                       <p className="text-xs font-medium text-red-400 mb-0.5">Motivo de rechazo:</p>
@@ -604,7 +643,6 @@ function VerificationsTab({ adminUid }: { adminUid: string }) {
                     </div>
                   )}
 
-                  {/* Acciones (solo pendientes) */}
                   {(r.status === 'pending' || r.status === 'under_review') && (
                     <div className="flex flex-col gap-2">
                       {r.status === 'pending' && (
@@ -614,7 +652,6 @@ function VerificationsTab({ adminUid }: { adminUid: string }) {
                         </button>
                       )}
 
-                      {/* Formulario rechazo */}
                       {rejectTarget === r.id ? (
                         <div className="flex flex-col gap-2">
                           <textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)}
@@ -704,7 +741,6 @@ function DonationsTab({ adminUid }: { adminUid: string }) {
         return p;
       }));
       setPosts(enriched);
-      // Pre-cargar links existentes
       const initial: Record<string, string> = {};
       enriched.forEach(p => { if (p.stripePaymentLinkUrl) initial[p.id] = p.stripePaymentLinkUrl; });
       setLinks(prev => ({ ...initial, ...prev }));
@@ -777,10 +813,9 @@ function DonationsTab({ adminUid }: { adminUid: string }) {
         ))}
       </div>
 
-      {/* Nota informativa */}
       <div className="mb-5 px-4 py-3 rounded-xl border border-zinc-800 bg-zinc-900/30">
         <p className="text-xs text-zinc-500 leading-relaxed">
-          <span className="text-zinc-300 font-medium">¿Cómo funciona?</span> Cuando una organización verifica crea un post con donaciones, el botón Donar permanece desactivado hasta que un admin introduce y aprueba el enlace de pago de Stripe. Crea los enlaces en <a href="https://dashboard.stripe.com/payment-links" target="_blank" className="text-blue-400 hover:underline">dashboard.stripe.com/payment-links</a>.
+          <span className="text-zinc-300 font-medium">¿Cómo funciona?</span> Cuando una organización verificada crea un post con donaciones, el botón Donar permanece desactivado hasta que un admin introduce y aprueba el enlace de pago de Stripe. Crea los enlaces en <a href="https://dashboard.stripe.com/payment-links" target="_blank" className="text-blue-400 hover:underline">dashboard.stripe.com/payment-links</a>.
         </p>
       </div>
 
@@ -814,7 +849,6 @@ function DonationsTab({ adminUid }: { adminUid: string }) {
                 </div>
               </div>
 
-              {/* Campo URL */}
               {filter === 'pending' && (
                 <div className="flex gap-2">
                   <input
@@ -837,7 +871,6 @@ function DonationsTab({ adminUid }: { adminUid: string }) {
                 </div>
               )}
 
-              {/* URL aprobada */}
               {filter === 'approved' && p.stripePaymentLinkUrl && (
                 <div className="flex items-center gap-2">
                   <a href={p.stripePaymentLinkUrl} target="_blank"
@@ -868,6 +901,8 @@ function UsersTab({ adminUid }: { adminUid: string }) {
   const [filter,  setFilter]  = useState<'all'|'verified'|'pending'|'banned'>('all');
   const [working, setWorking] = useState<string | null>(null);
   const [toast,   setToast]   = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 5;
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
@@ -876,16 +911,17 @@ function UsersTab({ adminUid }: { adminUid: string }) {
     try {
       let q: any;
       if (filter === 'verified') {
-        q = query(collection(db, 'users'), where('isVerified', '==', true), limit(80));
+        q = query(collection(db, 'users'), where('isVerified', '==', true), limit(100));
       } else if (filter === 'pending') {
-        q = query(collection(db, 'users'), where('verificationStatus', '==', 'pending'), limit(80));
+        q = query(collection(db, 'users'), where('verificationStatus', '==', 'pending'), limit(100));
       } else if (filter === 'banned') {
-        q = query(collection(db, 'users'), where('isActive', '==', false), limit(80));
+        q = query(collection(db, 'users'), where('isActive', '==', false), limit(100));
       } else {
-        q = query(collection(db, 'users'), orderBy('createdAt', 'desc'), limit(80));
+        q = query(collection(db, 'users'), orderBy('createdAt', 'desc'), limit(100));
       }
       const snap = await getDocs(q);
       setUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() } as UserRow)));
+      setCurrentPage(1);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   }, [filter]);
@@ -933,6 +969,9 @@ function UsersTab({ adminUid }: { adminUid: string }) {
       || (u.username || '').toLowerCase().includes(q);
   });
 
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  const paginatedUsers = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
   const ROLE_COLORS: Record<string, string> = {
     admin: 'red', moderator: 'purple', user: 'zinc',
   };
@@ -941,7 +980,6 @@ function UsersTab({ adminUid }: { adminUid: string }) {
     <div>
       <SectionHeader title="Gestión de usuarios" subtitle="Busca, cambia roles y gestiona el acceso de los usuarios" />
 
-      {/* Barra de búsqueda + filtros */}
       <div className="flex flex-col gap-3 mb-5">
         <div className="relative">
           <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -973,78 +1011,97 @@ function UsersTab({ adminUid }: { adminUid: string }) {
       {loading ? <Spinner /> : filtered.length === 0 ? (
         <EmptyState icon="👤" text="No se encontraron usuarios." />
       ) : (
-        <div className="flex flex-col gap-2">
-          {filtered.map(u => (
-            <div key={u.uid} className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
-              <div className="flex items-center gap-3">
-                {/* Avatar */}
-                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-zinc-600 to-zinc-800 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                  {(u.displayName || '?').charAt(0).toUpperCase()}
-                </div>
-
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <a href={`/profile/${u.uid}`} target="_blank"
-                      className="text-sm font-semibold text-white hover:underline">
-                      {u.displayName || 'Sin nombre'}
-                    </a>
-                    <Badge label={u.role || 'user'} color={ROLE_COLORS[u.role] || 'zinc'} />
-                    {u.isVerified && <Badge label="Verificado" color="blue" />}
-                    {!u.isActive && <Badge label="Suspendido" color="red" />}
-                    {u.verificationStatus === 'pending' && <Badge label="Verif. pendiente" color="yellow" />}
+        <>
+          <div className="flex flex-col gap-2">
+            {paginatedUsers.map(u => (
+              <div key={u.uid} className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-zinc-600 to-zinc-800 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                    {(u.displayName || '?').charAt(0).toUpperCase()}
                   </div>
-                  <p className="text-xs text-zinc-500 mt-0.5">@{u.username || '—'} · {u.email}</p>
-                </div>
 
-                {/* Acciones */}
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {u.uid !== adminUid && (
-                    <>
-                      {/* Cambiar rol */}
-                      <select
-                        value={u.role || 'user'}
-                        onChange={e => setRole(u.uid, e.target.value)}
-                        disabled={working === u.uid}
-                        className="text-xs px-2 py-1.5 rounded-lg outline-none disabled:opacity-40"
-                        style={{ background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text)' }}
-                      >
-                        <option value="user">user</option>
-                        <option value="moderator">moderator</option>
-                        <option value="admin">admin</option>
-                      </select>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <a href={`/profile/${u.uid}`} target="_blank"
+                        className="text-sm font-semibold text-white hover:underline">
+                        {u.displayName || 'Sin nombre'}
+                      </a>
+                      <Badge label={u.role || 'user'} color={ROLE_COLORS[u.role] || 'zinc'} />
+                      {u.isVerified && <Badge label="Verificado" color="blue" />}
+                      {!u.isActive && <Badge label="Suspendido" color="red" />}
+                      {u.verificationStatus === 'pending' && <Badge label="Verif. pendiente" color="yellow" />}
+                    </div>
+                    <p className="text-xs text-zinc-500 mt-0.5">@{u.username || '—'} · {u.email}</p>
+                  </div>
 
-                      {/* Revocar verificación */}
-                      {u.isVerified && (
-                        <button onClick={() => revokeVerification(u.uid)} disabled={working === u.uid}
-                          className="text-xs px-2 py-1.5 rounded-lg border border-zinc-700 text-zinc-500 hover:text-orange-400 hover:border-orange-800/40 transition disabled:opacity-40"
-                          title="Revocar verificación">
-                          ✕ Verif.
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {u.uid !== adminUid && (
+                      <>
+                        <select
+                          value={u.role || 'user'}
+                          onChange={e => setRole(u.uid, e.target.value)}
+                          disabled={working === u.uid}
+                          className="text-xs px-2 py-1.5 rounded-lg outline-none disabled:opacity-40"
+                          style={{ background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text)' }}
+                        >
+                          <option value="user">user</option>
+                          <option value="moderator">moderator</option>
+                          <option value="admin">admin</option>
+                        </select>
+
+                        {u.isVerified && (
+                          <button onClick={() => revokeVerification(u.uid)} disabled={working === u.uid}
+                            className="text-xs px-2 py-1.5 rounded-lg border border-zinc-700 text-zinc-500 hover:text-orange-400 hover:border-orange-800/40 transition disabled:opacity-40"
+                            title="Revocar verificación">
+                            ✕ Verif.
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => toggleBan(u.uid, u.isActive !== false)}
+                          disabled={working === u.uid}
+                          className={`text-xs px-3 py-1.5 rounded-lg border transition font-semibold disabled:opacity-40 ${
+                            u.isActive === false
+                              ? 'border-green-800/40 text-green-400 hover:bg-green-900/20'
+                              : 'border-red-800/40 text-red-400 hover:bg-red-900/20'
+                          }`}
+                        >
+                          {u.isActive === false ? 'Reactivar' : 'Suspender'}
                         </button>
-                      )}
-
-                      {/* Suspender / Reactivar */}
-                      <button
-                        onClick={() => toggleBan(u.uid, u.isActive !== false)}
-                        disabled={working === u.uid}
-                        className={`text-xs px-3 py-1.5 rounded-lg border transition font-semibold disabled:opacity-40 ${
-                          u.isActive === false
-                            ? 'border-green-800/40 text-green-400 hover:bg-green-900/20'
-                            : 'border-red-800/40 text-red-400 hover:bg-red-900/20'
-                        }`}
-                      >
-                        {u.isActive === false ? 'Reactivar' : 'Suspender'}
-                      </button>
-                    </>
-                  )}
-                  {u.uid === adminUid && (
-                    <span className="text-xs text-zinc-600 italic">Tú</span>
-                  )}
+                      </>
+                    )}
+                    {u.uid === adminUid && (
+                      <span className="text-xs text-zinc-600 italic">Tú</span>
+                    )}
+                  </div>
                 </div>
               </div>
+            ))}
+          </div>
+
+          {/* Paginación */}
+          {totalPages > 1 && (
+            <div className="flex justify-center items-center gap-3 mt-6">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                ← Anterior
+              </button>
+              <span className="text-xs text-zinc-500">
+                Página {currentPage} de {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Siguiente →
+              </button>
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -1065,7 +1122,6 @@ export default function AdminPanel() {
   });
   const [statsLoading, setStatsLoading] = useState(true);
 
-  // ── Auth guard ─────────────────────────────────────────────────────────────
   useEffect(() => {
     return onAuthStateChanged(auth, async user => {
       if (!user) { window.location.href = '/auth/login'; return; }
@@ -1087,7 +1143,6 @@ export default function AdminPanel() {
     });
   }, []);
 
-  // ── Cargar estadísticas ────────────────────────────────────────────────────
   useEffect(() => {
     if (!adminUser) return;
     const loadStats = async () => {
@@ -1115,7 +1170,6 @@ export default function AdminPanel() {
     loadStats();
   }, [adminUser]);
 
-  // ── Loading ────────────────────────────────────────────────────────────────
   if (authLoading) return (
     <div className="flex items-center justify-center min-h-screen">
       <div className="w-6 h-6 rounded-full border-2 border-zinc-700 border-t-zinc-300 animate-spin" />
@@ -1124,7 +1178,6 @@ export default function AdminPanel() {
 
   if (!adminUser) return null;
 
-  // ── Nav items ──────────────────────────────────────────────────────────────
   const NAV: { key: Section; label: string; icon: string; badge?: number }[] = [
     { key: 'dashboard',     label: 'Dashboard',    icon: '📊' },
     { key: 'reports',       label: 'Reportes',     icon: '🚩', badge: stats.openReports },
@@ -1136,7 +1189,6 @@ export default function AdminPanel() {
   return (
     <div className="flex min-h-[calc(100vh-3.5rem)]">
 
-      {/* ── Sidebar de navegación del panel ── */}
       <aside className="w-52 flex-shrink-0 border-r py-4 px-2"
         style={{ borderColor: 'var(--border)', background: 'var(--bg-card)' }}>
         <div className="px-3 mb-4">
@@ -1175,7 +1227,6 @@ export default function AdminPanel() {
         </div>
       </aside>
 
-      {/* ── Contenido principal ── */}
       <main className="flex-1 px-8 py-6 overflow-y-auto" style={{ minWidth: 0 }}>
         {section === 'dashboard' && (
           <DashboardTab stats={stats} loading={statsLoading} />

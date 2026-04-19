@@ -63,6 +63,7 @@ export default function CreatePostModal({ onClose, onCreated }: Props) {
     imageUrl: '',
     imageCaption: '',
     language: 'es',
+    stripePaymentLinkUrl: '', // nuevo campo
   });
 
   const [loading, setLoading] = useState(false);
@@ -112,6 +113,15 @@ export default function CreatePostModal({ onClose, onCreated }: Props) {
     if (!form.title.trim())      { setError('El título es obligatorio.'); return; }
     if (!form.content.trim())    { setError('El contenido es obligatorio.'); return; }
     if (form.content.length < 20){ setError('El contenido debe tener al menos 20 caracteres.'); return; }
+    
+    // Validar URL de Stripe si necesita donaciones
+    if (form.needsDonations && form.stripePaymentLinkUrl.trim()) {
+      const url = form.stripePaymentLinkUrl.trim();
+      if (!url.startsWith('https://')) {
+        setError('La URL de Stripe debe comenzar con https://');
+        return;
+      }
+    }
 
     const user = auth.currentUser;
     if (!user) { window.location.href = '/auth/login'; return; }
@@ -124,8 +134,9 @@ export default function CreatePostModal({ onClose, onCreated }: Props) {
       }
 
       const isWarCrime = form.contentType === 'war_crime_report';
+      const selectedDisaster = disasters.find(d => d.id === form.disasterId);
 
-      const docRef = await addDoc(collection(db, 'posts'), {
+      const postData: any = {
         disasterId: form.disasterId,
         authorId: user.uid,
         authorType: 'organization',
@@ -142,12 +153,12 @@ export default function CreatePostModal({ onClose, onCreated }: Props) {
         isWarCrimeReport: isWarCrime,
         needsDonations: form.needsDonations,
         needsVolunteers: form.needsVolunteers,
-        donationApprovalStatus: 'pending',
-        stripePaymentLinkUrl: '',
+        donationApprovalStatus: form.needsDonations ? 'pending' : 'none',
+        stripePaymentLinkUrl: form.needsDonations ? form.stripePaymentLinkUrl.trim() : '',
         stripePaymentLinkId: '',
-        // Desnormalizar país y tipo para que los filtros del feed funcionen sin join
-        country: disasters.find(d => d.id === form.disasterId)?.country || '',
-        disasterType: disasters.find(d => d.id === form.disasterId)?.type || '',
+        // Desnormalizar país y tipo para los filtros del feed
+        country: selectedDisaster?.country || '',
+        disasterType: selectedDisaster?.type || '',
         likesCount: 0,
         sharesCount: 0,
         commentsCount: 0,
@@ -156,8 +167,9 @@ export default function CreatePostModal({ onClose, onCreated }: Props) {
         totalRaisedEUR: 0,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
+      };
 
+      const docRef = await addDoc(collection(db, 'posts'), postData);
       onCreated(docRef.id);
     } catch (e: any) {
       console.error(e);
@@ -321,7 +333,7 @@ export default function CreatePostModal({ onClose, onCreated }: Props) {
             </div>
           </Field>
 
-          {/* Toggles */}
+          {/* Toggles de necesidades */}
           <div className="flex flex-col gap-3 px-4 py-3 rounded-xl" style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
             <p className="text-xs font-semibold text-zinc-400">Este post necesita:</p>
             <button type="button" onClick={() => toggle('needsVolunteers')}
@@ -344,6 +356,20 @@ export default function CreatePostModal({ onClose, onCreated }: Props) {
               </div>
             </button>
           </div>
+
+          {/* Campo de Stripe (solo si necesita donaciones) */}
+          {form.needsDonations && (
+            <Field label="Enlace de pago de Stripe" required hint="Pega aquí el enlace de pago creado en Stripe. Un administrador lo aprobará antes de activar el botón de donación.">
+              <input
+                type="url"
+                value={form.stripePaymentLinkUrl}
+                onChange={set('stripePaymentLinkUrl')}
+                placeholder="https://buy.stripe.com/..."
+                className="w-full px-4 py-2.5 rounded-xl text-sm text-white placeholder-zinc-600 focus:outline-none"
+                style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}
+              />
+            </Field>
+          )}
 
           {error && (
             <div className="flex items-start gap-2 px-4 py-3 rounded-xl bg-red-900/20 border border-red-800/40">

@@ -119,15 +119,15 @@ export default function DisastersPage() {
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-2">
-                <div className="bg-zinc-800/50 rounded-xl p-2 text-center">
+                <div className="rounded-xl p-2 text-center bg-zinc-800/50">
                   <p className="text-sm font-bold text-green-400">{fmtEUR(d.totalDonationsEUR || 0)}</p>
                   <p className="text-xs text-zinc-600 mt-0.5">Recaudado</p>
                 </div>
-                <div className="bg-zinc-800/50 rounded-xl p-2 text-center">
+                <div className="rounded-xl p-2 text-center bg-zinc-800/50">
                   <p className="text-sm font-bold text-purple-400">{d.totalVolunteersRegistered || 0}</p>
                   <p className="text-xs text-zinc-600 mt-0.5">Voluntarios</p>
                 </div>
-                <div className="bg-zinc-800/50 rounded-xl p-2 text-center">
+                <div className="rounded-xl p-2 text-center bg-zinc-800/50">
                   <p className="text-sm font-bold text-blue-400">{d.postsCount || 0}</p>
                   <p className="text-xs text-zinc-600 mt-0.5">Posts</p>
                 </div>
