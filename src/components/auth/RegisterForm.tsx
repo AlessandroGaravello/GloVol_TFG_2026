@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { auth, db } from '../../lib/firebase';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import PhoneInput from '../ui/PhoneInput';
 
 const EyeOpen = () => (
@@ -67,6 +67,16 @@ export default function RegisterForm() {
 
     setLoading(true);
     try {
+      // Comprobar que el nombre de usuario no esté ya en uso
+      const usernameSnap = await getDocs(
+        query(collection(db, 'users'), where('username', '==', form.username))
+      );
+      if (!usernameSnap.empty) {
+        setError('Este nombre de usuario ya está en uso');
+        setLoading(false);
+        return;
+      }
+
       const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
       await updateProfile(cred.user, { displayName: form.displayName });
       await setDoc(doc(db, 'users', cred.user.uid), {
