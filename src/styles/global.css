@@ -265,3 +265,71 @@ body, aside, main, .rounded-xl, .rounded-2xl, input, textarea, select {
   transition: background-color 0.18s ease, border-color 0.12s ease, color 0.12s ease;
 }
 
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RESPONSIVE MOBILE — Sidebars como drawers + header adaptado
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* En móvil: ocultar sidebars fijos de escritorio */
+@media (max-width: 767px) {
+  .gv-sidebar-left,
+  .gv-sidebar-right {
+    display: none !important;
+  }
+
+  /* El contenido principal ocupa toda la pantalla */
+  main {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    max-width: 100% !important;
+  }
+
+  /* Buscador: ocupa el espacio disponible, sin padding extra */
+  .gv-search-wrapper {
+    min-width: 0;
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+  }
+
+  .gv-search-wrapper input {
+    font-size: 0.8rem;
+  }
+
+  /* Toggle de tema: más compacto */
+  .gv-theme-toggle span.relative {
+    width: 2.25rem !important;
+    height: 1.25rem !important;
+  }
+  .gv-theme-toggle span.inline-flex {
+    width: 1rem !important;
+    height: 1rem !important;
+  }
+}
+
+/* En tablet/desktop: ocultar drawers móviles, FABs y botones del header móvil */
+@media (min-width: 768px) {
+  .gv-sidebar-left-mobile,
+  .gv-sidebar-right-mobile,
+  .gv-mobile-overlay,
+  .gv-fab-left,
+  .gv-fab-right,
+  .gv-header-mob-btn {
+    display: none !important;
+  }
+}
+
+/* Modo claro — sidebars móviles */
+html:not(.dark) .gv-sidebar-left-mobile,
+html:not(.dark) .gv-sidebar-right-mobile {
+  background-color: #ffffff !important;
+  border-color: #e5e7eb !important;
+}
+
+/* Modo claro — botones de sidebar en header */
+html:not(.dark) .gv-header-mob-btn {
+  color: #4b5563 !important;
+}
+html:not(.dark) .gv-header-mob-btn:hover {
+  background-color: #f3f4f6 !important;
+  color: #1f2937 !important;
+}

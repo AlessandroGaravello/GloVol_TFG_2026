@@ -38,12 +38,51 @@ function useTheme() {
   return { dark, toggle };
 }
 
+// ── Icono hamburgesa ──────────────────────────────────────────────────────────
+function IconMenu({ className = 'w-5 h-5' }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" />
+    </svg>
+  );
+}
+
+// ── Icono info (sidebar derecho) ──────────────────────────────────────────────
+function IconInfo({ className = 'w-5 h-5' }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+    </svg>
+  );
+}
+
 export default function Header() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser]         = useState<User | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
-  const [lang, setLangState] = useState<LangCode>(getLang());
-  const { dark, toggle } = useTheme();
+  const [lang, setLangState]    = useState<LangCode>(getLang());
+  const [leftOpen, setLeftOpen] = useState(false);
+  const [rightOpen, setRightOpen] = useState(false);
+  const { dark, toggle }        = useTheme();
+
+  // Sincronizar estado de sidebars con sus propios eventos
+  useEffect(() => {
+    const onLeft  = () => { setLeftOpen(true);  setRightOpen(false); };
+    const onRight = () => { setRightOpen(true); setLeftOpen(false); };
+    window.addEventListener('glovol:sidebar-left-open',  onLeft);
+    window.addEventListener('glovol:sidebar-right-open', onRight);
+    // También escuchar cierres (cuando el propio sidebar se cierra desde dentro)
+    const onLeftClose  = () => setLeftOpen(false);
+    const onRightClose = () => setRightOpen(false);
+    window.addEventListener('glovol:sidebar-left-close',  onLeftClose);
+    window.addEventListener('glovol:sidebar-right-close', onRightClose);
+    return () => {
+      window.removeEventListener('glovol:sidebar-left-open',  onLeft);
+      window.removeEventListener('glovol:sidebar-right-open', onRight);
+      window.removeEventListener('glovol:sidebar-left-close',  onLeftClose);
+      window.removeEventListener('glovol:sidebar-right-close', onRightClose);
+    };
+  }, []);
 
   // Escuchar cambios de idioma desde otros componentes
   useEffect(() => {
@@ -69,25 +108,59 @@ export default function Header() {
     setLangOpen(false);
   };
 
+  // Disparar eventos para abrir/cerrar sidebars desde el header
+  const toggleLeft = () => {
+    if (leftOpen) {
+      setLeftOpen(false);
+      window.dispatchEvent(new CustomEvent('glovol:header-sidebar-left-close'));
+    } else {
+      setLeftOpen(true);
+      setRightOpen(false);
+      window.dispatchEvent(new CustomEvent('glovol:header-sidebar-left-open'));
+    }
+  };
+
+  const toggleRight = () => {
+    if (rightOpen) {
+      setRightOpen(false);
+      window.dispatchEvent(new CustomEvent('glovol:header-sidebar-right-close'));
+    } else {
+      setRightOpen(true);
+      setLeftOpen(false);
+      window.dispatchEvent(new CustomEvent('glovol:header-sidebar-right-open'));
+    }
+  };
+
   const currentLang = LANGUAGES.find(l => l.code === lang) ?? LANGUAGES[0];
   const isRtl = lang === 'ar';
 
   return (
     <header
       dir={isRtl ? 'rtl' : 'ltr'}
-      className="fixed top-0 left-0 right-0 z-50 bg-black border-b border-zinc-800 h-14 flex items-center px-4 gap-4 w-full"
+      className="fixed top-0 left-0 right-0 z-50 bg-black border-b border-zinc-800 h-14 flex items-center w-full"
     >
-      {/* Logo */}
-      <a href="/" className="flex items-center gap-1.5 flex-shrink-0">
+      {/* ── MÓVIL: botón sidebar izquierdo ── */}
+      <button
+        onClick={toggleLeft}
+        aria-label="Menú navegación"
+        className={`gv-header-mob-btn flex-shrink-0 flex items-center justify-center w-10 h-10 mx-1 rounded-lg transition-colors ${
+          leftOpen ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+        }`}
+      >
+        <IconMenu />
+      </button>
+
+      {/* ── Logo ── */}
+      <a href="/" className="flex items-center gap-1.5 flex-shrink-0 px-1">
         <span style={{ color: 'var(--gv-accent)' }} className="font-bold text-xl tracking-tight">GloVol</span>
       </a>
 
-      {/* Buscador centrado */}
-      <div className="flex-1 max-w-md mx-auto">
-        <div className="relative">
+      {/* ── Buscador ── */}
+      <div className="flex-1 min-w-0 px-2 gv-search-wrapper">
+        <div className="relative max-w-md mx-auto">
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"
+            className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -103,17 +176,18 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Contenedor de acciones (sin flex-row-reverse para que dir="rtl" haga la inversión) */}
-      <div className="flex items-center gap-2 flex-shrink-0">
-        {/* Selector idioma */}
-        <div className="relative">
+      {/* ── Acciones ── */}
+      <div className="flex items-center gap-1 flex-shrink-0 px-2">
+
+        {/* Selector idioma — oculto en móvil muy pequeño */}
+        <div className="relative gv-lang-selector">
           <button
             onClick={() => setLangOpen(!langOpen)}
             className="flex items-center gap-1 text-zinc-400 hover:text-white text-sm transition px-2 py-1.5 rounded-lg hover:bg-zinc-900"
           >
             <span className="text-base leading-none">{currentLang.flag}</span>
-            <span className="font-medium text-xs">{currentLang.code.toUpperCase()}</span>
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <span className="font-medium text-xs hidden sm:inline">{currentLang.code.toUpperCase()}</span>
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 hidden sm:block" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
           </button>
@@ -187,11 +261,12 @@ export default function Header() {
           </a>
         )}
 
-        {/* Toggle dark/light con corrección para RTL */}
+        {/* Toggle dark/light — switch en desktop, icono simple en móvil */}
+        {/* Versión switch (desktop) */}
         <button
           onClick={toggle}
           aria-label="Cambiar tema"
-          className="relative inline-flex items-center flex-shrink-0"
+          className="relative inline-flex items-center flex-shrink-0 hidden sm:inline-flex"
         >
           <span
             suppressHydrationWarning
@@ -201,7 +276,7 @@ export default function Header() {
           >
             <span
               suppressHydrationWarning
-              className={`inline-flex h-5 w-5 items-center justify-center rounded-full bg-white shadow transition-transform duration-200 ${
+              className={`inline-flex h-5 w-5 items-center justify-center rounded-full bg-white shadow overflow-hidden transition-transform duration-200 ${
                 dark === undefined
                   ? 'translate-x-0.5 rtl:-translate-x-0.5'
                   : dark
@@ -225,12 +300,39 @@ export default function Header() {
             </span>
           </span>
         </button>
+        {/* Versión icono (móvil) */}
+        <button
+          onClick={toggle}
+          aria-label="Cambiar tema"
+          className="flex sm:hidden flex-shrink-0 items-center justify-center w-8 h-8 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900 transition"
+        >
+          {dark ? (
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+              <path fillRule="evenodd" d="M9.528 1.718a.75.75 0 01.162.819A8.97 8.97 0 009 6a9 9 0 009 9 8.97 8.97 0 003.463-.69.75.75 0 01.981.98 10.503 10.503 0 01-9.694 6.46c-5.799 0-10.5-4.701-10.5-10.5 0-4.368 2.667-8.112 6.46-9.694a.75.75 0 01.818.162z" clipRule="evenodd" />
+            </svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-yellow-400" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM18.894 6.166a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.592-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z" />
+            </svg>
+          )}
+        </button>
 
-        {/* Tres puntos */}
-        <button className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition">
+        {/* Tres puntos — oculto en móvil para ahorrar espacio */}
+        <button className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition hidden sm:flex">
           <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
             <path d="M12 6a2 2 0 110-4 2 2 0 010 4zm0 8a2 2 0 110-4 2 2 0 010 4zm0 8a2 2 0 110-4 2 2 0 010 4z" />
           </svg>
+        </button>
+
+        {/* ── MÓVIL: botón sidebar derecho ── */}
+        <button
+          onClick={toggleRight}
+          aria-label="Panel de catástrofes"
+          className={`gv-header-mob-btn flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-lg transition-colors ${
+            rightOpen ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+          }`}
+        >
+          <IconInfo />
         </button>
       </div>
     </header>

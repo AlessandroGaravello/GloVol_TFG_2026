@@ -28,7 +28,18 @@ const SEVERITY_DOT: Record<string, string> = {
 export default function RightSidebar() {
   const [disasters, setDisasters] = useState<Disaster[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth < 768 : false
+  );
   const lang = useLang();
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -50,6 +61,32 @@ export default function RightSidebar() {
     load();
   }, []);
 
+  // Escuchar eventos para abrir/cerrar desde header y sidebar izquierdo
+  useEffect(() => {
+    const close = () => setMobileOpen(false);
+    const open  = () => setMobileOpen(true);
+    window.addEventListener('glovol:sidebar-left-open',          close);
+    window.addEventListener('glovol:header-sidebar-left-open',   close);
+    window.addEventListener('glovol:header-sidebar-right-close', close);
+    window.addEventListener('glovol:header-sidebar-right-open',  open);
+    return () => {
+      window.removeEventListener('glovol:sidebar-left-open',          close);
+      window.removeEventListener('glovol:header-sidebar-left-open',   close);
+      window.removeEventListener('glovol:header-sidebar-right-close', close);
+      window.removeEventListener('glovol:header-sidebar-right-open',  open);
+    };
+  }, []);
+
+  const handleToggle = () => {
+    const next = !mobileOpen;
+    setMobileOpen(next);
+    if (next) {
+      window.dispatchEvent(new CustomEvent('glovol:sidebar-right-open'));
+    } else {
+      window.dispatchEvent(new CustomEvent('glovol:sidebar-right-close'));
+    }
+  };
+
   const HOW_IT_WORKS = [
     { icon: '🌍', key: 'sidebar.step1' },
     { icon: '❤️', key: 'sidebar.step2' },
@@ -64,9 +101,8 @@ export default function RightSidebar() {
     'general.accessibility',
   ] as const;
 
-  return (
-    <aside dir="ltr" className="fixed right-0 top-14 bottom-0 w-72 bg-black border-l border-zinc-800 overflow-y-auto py-4 px-3 z-40">
-
+  const sidebarContent = (
+    <>
       {/* Catástrofes activas */}
       <div className="mb-5">
         <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider px-1 mb-3">
@@ -139,6 +175,46 @@ export default function RightSidebar() {
         </div>
         <p className="text-xs text-zinc-800 mt-2">GloVol · TFG 2025</p>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* ── Desktop: sidebar fijo ── */}
+      {!isMobile && (
+        <aside dir="ltr" className="gv-sidebar-right fixed right-0 top-14 bottom-0 w-72 bg-black border-l border-zinc-800 overflow-y-auto py-4 px-3 z-40">
+          {sidebarContent}
+        </aside>
+      )}
+
+      {/* ── Mobile: overlay + panel deslizante ── */}
+      {mobileOpen && (
+        <div
+          className="gv-mobile-overlay fixed inset-0 bg-black/60 z-50 backdrop-blur-sm"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+      {mobileOpen && (
+        <aside
+          dir="ltr"
+          className="gv-sidebar-right-mobile fixed top-14 bottom-0 right-0 w-full max-w-xs bg-black border-l border-zinc-800 overflow-y-auto py-4 px-3 z-50 transition-transform duration-300 ease-in-out translate-x-0"
+        >
+          {/* Botón cerrar en móvil */}
+          <button
+            onClick={() => setMobileOpen(false)}
+            className="absolute top-3 left-3 p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 transition"
+            aria-label="Cerrar panel"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          <div className="pt-8">
+            {sidebarContent}
+          </div>
+        </aside>
+      )}
+
+    </>
   );
 }

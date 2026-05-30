@@ -35,7 +35,7 @@ const { title = 'GloVol', showSidebars = true, currentPath = '' } = Astro.props;
     {showSidebars ? (
       <div class="flex pt-14">
         <LeftSidebar client:load currentPath={currentPath} />
-        <main class="flex-1 ml-56 mr-72 min-h-screen">
+        <main class="flex-1 min-h-screen ml-0 mr-0 md:ml-56 md:mr-72">
           <slot />
         </main>
         <RightSidebar client:load />

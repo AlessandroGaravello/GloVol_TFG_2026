@@ -29,7 +29,18 @@ export default function LeftSidebar({ currentPath = '' }: { currentPath?: string
   const [isAdmin, setIsAdmin] = useState(false);
   const [volunteerEntries, setVolunteerEntries] = useState<VolunteerEntry[]>([]);
   const [authLoading, setAuthLoading] = useState(true);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth < 768 : false
+  );
   const lang = useLang();
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   useEffect(() => {
     return onAuthStateChanged(auth, async (u) => {
@@ -43,7 +54,6 @@ export default function LeftSidebar({ currentPath = '' }: { currentPath?: string
             setIsAdmin(role === 'admin' || role === 'moderator');
           }
         } catch {}
-        // Cargar voluntariado del usuario
         try {
           const volSnap = await getDocs(query(
             collection(db, 'volunteers'),
@@ -57,7 +67,6 @@ export default function LeftSidebar({ currentPath = '' }: { currentPath?: string
             } catch {}
             return v;
           }));
-          // Ordenar por registeredAt descendente en cliente
           entries.sort((a: any, b: any) => {
             const ta = a.registeredAt?.toMillis?.() ?? 0;
             const tb = b.registeredAt?.toMillis?.() ?? 0;
@@ -72,10 +81,36 @@ export default function LeftSidebar({ currentPath = '' }: { currentPath?: string
     });
   }, []);
 
+  // Escuchar eventos para abrir/cerrar desde header y sidebar derecho
+  useEffect(() => {
+    const close = () => setMobileOpen(false);
+    const open  = () => setMobileOpen(true);
+    window.addEventListener('glovol:sidebar-right-open',         close);
+    window.addEventListener('glovol:header-sidebar-right-open',  close);
+    window.addEventListener('glovol:header-sidebar-left-close',  close);
+    window.addEventListener('glovol:header-sidebar-left-open',   open);
+    return () => {
+      window.removeEventListener('glovol:sidebar-right-open',         close);
+      window.removeEventListener('glovol:header-sidebar-right-open',  close);
+      window.removeEventListener('glovol:header-sidebar-left-close',  close);
+      window.removeEventListener('glovol:header-sidebar-left-open',   open);
+    };
+  }, []);
+
+  const handleToggle = () => {
+    const next = !mobileOpen;
+    setMobileOpen(next);
+    if (next) {
+      window.dispatchEvent(new CustomEvent('glovol:sidebar-left-open'));
+    } else {
+      window.dispatchEvent(new CustomEvent('glovol:sidebar-left-close'));
+    }
+  };
+
   const path = currentPath || (typeof window !== 'undefined' ? window.location.pathname : '');
 
-  return (
-    <aside dir="ltr" className="fixed left-0 top-14 bottom-0 w-56 bg-black border-r border-zinc-800 flex flex-col py-3 z-40">
+  const sidebarContent = (
+    <>
       <nav className="flex flex-col gap-0.5 px-2">
         {NAV_KEYS.map(item => {
           const isActive = path === item.href;
@@ -97,7 +132,6 @@ export default function LeftSidebar({ currentPath = '' }: { currentPath?: string
           );
         })}
 
-        {/* Enlace al panel de administración (solo admins y moderadores) */}
         {isAdmin && (
           <>
             <div className="mx-2 my-1.5 h-px bg-zinc-800" />
@@ -135,7 +169,6 @@ export default function LeftSidebar({ currentPath = '' }: { currentPath?: string
         </div>
       </div>
 
-      {/* ── Voluntariado del usuario ── */}
       {!authLoading && user && volunteerEntries.length > 0 && (
         <>
           <div className="mx-4 my-3 h-px bg-zinc-800" />
@@ -170,6 +203,44 @@ export default function LeftSidebar({ currentPath = '' }: { currentPath?: string
         <p className="text-xs text-zinc-700">GloVol © 2025</p>
         <p className="text-xs text-zinc-700">TFG — Alessandro Garavello</p>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* ── Desktop: sidebar fijo ── */}
+      {!isMobile && (
+        <aside dir="ltr" className="gv-sidebar-left fixed left-0 top-14 bottom-0 w-56 bg-black border-r border-zinc-800 flex flex-col py-3 z-40">
+          {sidebarContent}
+        </aside>
+      )}
+
+      {/* ── Mobile: overlay + panel deslizante ── */}
+      {mobileOpen && (
+        <div
+          className="gv-mobile-overlay fixed inset-0 bg-black/60 z-50 backdrop-blur-sm"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+      {mobileOpen && (
+        <aside
+          dir="ltr"
+          className="gv-sidebar-left-mobile fixed top-14 bottom-0 left-0 w-full max-w-xs bg-black border-r border-zinc-800 flex flex-col py-3 z-50 transition-transform duration-300 ease-in-out translate-x-0"
+        >
+          {/* Botón cerrar en móvil */}
+          <button
+            onClick={() => setMobileOpen(false)}
+            className="absolute top-3 right-3 p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 transition"
+            aria-label="Cerrar menú"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          {sidebarContent}
+        </aside>
+      )}
+
+    </>
   );
 }
